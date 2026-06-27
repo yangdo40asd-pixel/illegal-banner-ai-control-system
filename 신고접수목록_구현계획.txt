@@ -1,0 +1,480 @@
+================================================================================
+  신고 접수 목록 화면 — 구현 계획서
+  프로젝트: 불법현수막 AI 통합관제 시스템 (BannerGuardSystem)
+  궁극 목표: AI가 의심 건을 걸러주고, 공무원이 Human-in-the-loop로 최종 단속 판단
+  이 화면 역할: 시민 신고 채널의 접수·배정·처리·반려 행정 흐름
+  참고 문서: MVVM.txt, 연결구조(필독).txt, 신고접수목록.png
+  작성일: 2026-06-25
+================================================================================
+
+
+================================================================================
+0. 전체 전략 (한 줄)
+================================================================================
+
+  "앱 껍데기(Shell+네비) 먼저 → 목록 화면 MVVM 골격 → 목업 데이터로 UI 완성
+   → 하단 상세·반려·엑셀 → 마지막에 실제 DB/API 연동"
+
+  ※ 기존 실시간 모니터링(MainWindow)은 건드리지 않고, Shell 안에 탭/페이지로 공존.
+
+
+================================================================================
+0-1. 현재 코드베이스 상태 (2026-06-27 기준) — 계획 수정 반영
+================================================================================
+
+  [이미 됨 — Phase A 일부 완료]
+    · MainWindow.xaml = Shell 역할 (좌측 사이드바 6메뉴 + ContentControl)
+    · NavigateCommand + CurrentView (MainViewModel.cs)
+    · RealTimeMonitoringView, CctvMonitoringView 동작
+    · App.xaml.cs → BackendManager.Start() + MainViewModel 유지
+
+  [아직 안 됨 — 이번 작업 핵심]
+    · "신고 접수 목록" 클릭 시 아무 동작 없음 (NavigateCommand에 ReportList 분기 없음)
+    · ReportListView / ReportListViewModel / Model / Repository 전부 미생성
+    · ShellWindow 분리 불필요 → 기존 MainWindow 재사용 권장
+
+  [계획 변경]
+    · Phase A: ShellWindow 신규 생성 X → MainWindow + NavigateCommand 확장만
+    · Phase A-2: DataTemplate 또는 Navigate 시 ReportListViewModel 주입
+
+
+================================================================================
+1. 화면이 시스템 안에서 어디에 오는지
+================================================================================
+
+  [앱 Shell]  ← 새로 만듦 (좌측 메뉴 5개)
+    ├─ 실시간 모니터링     ← 기존 MainWindow 내용 이전 (CCTV AI 관제)
+    ├─ 신고 접수 목록 ★   ← 이번에 새로 구현
+    ├─ 단속 처리 현황     ← Phase 2 (보류)
+    ├─ 통계/리포트        ← 로드맵
+    └─ 시스템 설정        ← 로드맵
+
+  신고 접수 목록 ≠ 실시간 모니터링
+    · 모니터링: WebSocket + CCTV + AI 실시간 탐지 (이미 있음)
+    · 신고목록: 시민 신고 건 CRUD + 행정 상태 머신 (새로 만듦)
+
+
+================================================================================
+2. 구현 Phase 요약
+================================================================================
+
+  Phase A  앱 Shell + 네비게이션 (2~3일)
+  Phase B  Model + Enum + 목업 데이터 (1일)
+  Phase C  KPI + 검색바 + 메인 테이블 (2~3일)
+  Phase D  상태별 액션 버튼 + 담당자 배정 (1~2일)
+  Phase E  하단 상세 패널 (2일)
+  Phase F  반려 사유 팝업 (1일)
+  Phase G  필터 (기간·상태·유형·지역) (1~2일)
+  Phase H  엑셀 다운로드 (1일)
+  Phase I  지도 (보류 → 별 Phase)
+  Phase J  실데이터 연동 (SQLite/API) (2~3일)
+
+  MVP 데모 가능 시점: Phase A~F 완료 (약 1~1.5주)
+  교수님 시연용: Phase A~H + 목업 데이터
+
+
+================================================================================
+3. Phase A — 앱 Shell + 네비게이션
+================================================================================
+
+  [목표]
+    좌측 사이드바 클릭 시 화면 전환. 피그마 신고접수목록.png 레이아웃 뼈대.
+
+  [새 파일 — ShellWindow 대신 MainWindow 활용]
+    Views/ReportListView.xaml(.cs)       ← 신고 접수 목록 (신규)
+    ViewModels/ReportListViewModel.cs  ← 신규
+
+  [수정 파일]
+    MainWindow.xaml                    ← (변경 최소) ReportListView DataTemplate 등록
+    ViewModels/MainViewModel.cs        ← NavigateCommand에 ReportList 분기 추가
+
+  [구조 — 현재 MainWindow 그대로]
+    MainWindow (Shell)
+      ├─ Sidebar (6 Menu RadioButton) — 이미 있음
+      └─ ContentControl Content="{Binding CurrentView}"
+           · RealTimeMonitoringView (기존)
+           · CctvMonitoringView (기존)
+           · ReportListView (신규) ← DataContext = ReportListViewModel
+
+  [MVVM]
+    MainViewModel: Shell + WebSocket + 텔레메트리 (기존 유지)
+    ReportListViewModel: 신고 목록 전용 (Repository 주입, WebSocket 없음)
+
+  [주의 — 연결구조(필독) 준수]
+    · App.xaml.cs: BackendManager.Start() 유지 (Shell 시작 시 1회)
+    · WebSocket은 MonitoringViewModel(실시간 모니터링)에서만 구독
+    · 신고 목록 화면은 WebSocket 불필요 (DB/REST 조회)
+
+  [완료 기준]
+    □ 사이드바 5메뉴 표시, 신고 접수 목록 클릭 시 ReportListView 표시
+    □ 실시간 모니터링 클릭 시 기존 CCTV 화면 그대로 동작
+    □ dotnet build 성공
+
+
+================================================================================
+4. Phase B — Model + Enum + 목업 데이터
+================================================================================
+
+  [Models/ — WPF 타입 금지]
+
+    ReportItemModel.cs
+      string ReportNo              // R-2026-0627-001
+      DateTime ReportedAt
+      string Location
+      string ReporterName
+      string ReporterPhoneMasked   // 010-****-1234
+      ReportCategory Category      // enum
+      int AttachmentCount
+      string[] AttachmentPaths     // 또는 base64 목록
+      double AiConfidence          // 0~100
+      string VlmSummary            // AI 판단 한줄
+      ReportStatus Status          // enum
+      string AssigneeName          // 담당자
+      DateTime? ProcessedAt
+      string RejectReason          // 반려 시
+
+    Enums:
+      ReportStatus: Pending, InProgress, Completed, Rejected
+      ReportCategory: Politics, Commercial, Religion, Event, Personal, CivilComplaint
+
+  [Services/]
+
+    IReportRepository.cs
+      GetAll(filter), GetById, UpdateStatus, Assign, Reject(...)
+    MockReportRepository.cs        ← Phase J 전까지 목업 20~30건
+    ReportCategoryTagHelper.cs     ← Category → 표시 라벨·색상 코드 (Brush는 Converter)
+
+  [Converters/]
+
+    CategoryToBrushConverter.cs    ← 피그마 태그 색상
+      정치/선거     → Blue
+      상업/부동산   → Red
+      종교         → Purple
+      행사/모임     → Green
+      개인/사업     → Orange
+      민원/항의     → Gray
+
+    ReportStatusToBrushConverter.cs
+    AiConfidenceToBrushConverter.cs  ← 80+ green, 50~79 orange, 50- red
+
+  [완료 기준]
+    □ MockReportRepository에 피그마와 유사한 7건+ 샘플
+    □ Model에 System.Windows.* 참조 없음
+
+
+================================================================================
+5. Phase C — KPI + 검색바 + 메인 테이블
+================================================================================
+
+  [ViewModels/ReportListViewModel.cs]
+
+    // KPI (목록에서 자동 집계 또는 Repository)
+    int TotalCount, PendingCount, InProgressCount, CompletedCount, RejectedCount
+
+    // 검색
+    string SearchText
+    ICommand SearchCommand
+    ICommand RefreshCommand
+
+    // 목록
+    ObservableCollection<ReportItemModel> Reports
+    ObservableCollection<ReportItemModel> FilteredReports  // 또는 ICollectionView
+    ReportItemModel? SelectedReport
+
+    // 페이징
+    int CurrentPage, PageSize=25, TotalPages
+
+  [Views/ReportListView.xaml]
+
+    [상단 KPI 5카드]
+      Binding: TotalCount, PendingCount, ...
+
+    [검색바]
+      TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+      Placeholder: 신고번호, 위치, 신고자명
+
+    [우측 버튼]
+      엑셀 다운로드 → ExportExcelCommand (Phase H)
+      새로고침 → RefreshCommand
+
+    [DataGrid 또는 ListView]
+      컬럼 10개:
+        접수번호 | 신고일시 | 위치 | 신고자 | 내용분류 | 첨부사진 | AI분석 | 처리상태 | 담당자 | 액션
+
+      · 내용분류: DataTemplate + CategoryToBrushConverter pill
+      · AI분석: ProgressBar Value="{Binding AiConfidence}" + TextBlock %
+      · 처리상태: Status pill Converter
+      · SelectedItem="{Binding SelectedReport, Mode=TwoWay}"
+
+  [완료 기준]
+    □ 피그마 신고접수목록.png와 레이아웃 유사
+    □ KPI 숫자 Mock 데이터와 일치
+    □ 행 선택 시 SelectedReport 갱신
+
+
+================================================================================
+6. Phase D — 상태별 액션 버튼
+================================================================================
+
+  [DataTemplate — 액션 컬럼]
+
+    DataTrigger / Converter로 상태별 버튼 노출:
+
+    | 상태     | 버튼           | Command                    |
+    |----------|----------------|----------------------------|
+    | 처리대기 | "접수"         | AcceptReportCommand        |
+    | 처리중   | "이어서 처리"  | ContinueProcessCommand     |
+    | 처리완료 | "결과 보기"    | ViewResultCommand          |
+    | 반려     | "사유 보기"    | ViewRejectReasonCommand    |
+
+  [ReportListViewModel 로직]
+
+    AcceptReportCommand:
+      · 상태 Pending → InProgress
+      · 담당자 = 현재 로그인 사용자 (임시: "김무주" 하드코딩)
+      · Repository.Update
+
+    ContinueProcessCommand:
+      · 상세 패널 열기 + (향후) 단속 처리 화면으로 네비
+
+    ViewResultCommand / ViewRejectReasonCommand:
+      · 하단 패널 또는 팝업
+
+  [완료 기준]
+    □ 상태별 올바른 버튼만 보임
+    □ "접수" 클릭 시 상태·담당자 변경 + KPI 갱신
+
+
+================================================================================
+7. Phase E — 하단 상세 패널 (행 선택 시)
+================================================================================
+
+  [Views/ReportDetailPanel.xaml]  UserControl
+
+    Visible: SelectedReport != null
+
+    [좌] 신고자 원본 사진
+      Image Source="{Binding SelectedReport.AttachmentPaths[0]}"
+      (ImageLoaderConverter 재사용)
+
+    [중] 신고자 정보
+      성명, 연락처, 신고 시간
+
+    [우] AI 분석
+      AiConfidence ProgressBar
+      VlmSummary TextBlock (여러 줄)
+
+    [하단] 지도
+      Phase I 보류 → placeholder "지도 연동 예정" Border
+
+  [MVVM]
+    ReportListViewModel.SelectedReport 바인딩만으로 패널 갱신
+    별도 ReportDetailViewModel은 선택 사항 (단순하면 불필요)
+
+  [완료 기준]
+    □ 테이블 행 클릭 → 하단 패널 3영역 동시 갱신
+    □ 사진 클릭 시 확대 팝업 (선택, Phase E+)
+
+
+================================================================================
+8. Phase F — 반려 사유 팝업
+================================================================================
+
+  [Views/RejectReasonDialog.xaml]  Window 또는 ContentDialog 스타일
+
+    ComboBox 사유:
+      · 합법 현수막
+      · 중복 신고
+      · 사진 불량
+      · 위치 불명
+      · 기타
+
+    TextBox 상세 사유 (기타 시)
+
+    [반려 처리] RejectConfirmCommand
+    [취소]     CancelCommand
+
+  [ReportListViewModel]
+    RejectReportCommand(report) → 다이얼로그 Open
+    확인 시 Status=Rejected, RejectReason 저장, KPI 갱신
+
+  [MVVM 팁]
+    IDialogService 인터페이스로 ViewModel이 Window 직접 new 하지 않게 (선택)
+
+  [완료 기준]
+    □ 반려 처리 후 테이블 상태·KPI·사유 보기 버튼 동작
+
+
+================================================================================
+9. Phase G — 필터 바 확장
+================================================================================
+
+  [ReportFilterModel]
+    DateTime? FromDate, ToDate
+    ReportStatus? StatusFilter
+    ReportCategory? CategoryFilter
+    string RegionFilter          // 구/동
+
+  [UI]
+    DatePicker x2, ComboBox x3
+    FilterApplyCommand → Repository.GetFiltered(filter)
+    KPI도 필터 결과 기준 재계산
+
+  [완료 기준]
+    □ 기간+상태+유형+지역 조합 필터 동작
+
+
+================================================================================
+10. Phase H — 엑셀 다운로드
+================================================================================
+
+  [패키지]
+    ClosedXML 또는 EPPlus (NuGet)
+
+  [Services/IExcelExportService.cs]
+    ExportReports(IEnumerable<ReportItemModel> rows, string path)
+
+  [포함 컬럼]
+    접수번호, 신고일시, 위치, 신고자, 유형, AI 신뢰도, 처리 상태, 담당자, 처리 일시
+
+  [ReportListViewModel]
+    ExportExcelCommand → SaveFileDialog → Export
+
+  [완료 기준]
+    □ xlsx 파일 생성, 한글 컬럼명, 현재 필터된 목록 기준 export
+
+
+================================================================================
+11. Phase I — 지도 (보류, 로드맵)
+================================================================================
+
+  · WebView2 + Kakao/VWorld API 또는 정적 이미지 맵
+  · SelectedReport.Location → 좌표 Geocoding
+  · 신고접수목록.png 하단 "신고 위치 지도" 영역
+  · Phase E placeholder 교체
+
+  ※ 교수님 1차 시연: "지도 연동 예정" placeholder로 충분
+
+
+================================================================================
+12. Phase J — 실데이터 연동
+================================================================================
+
+  [옵션 A — SQLite 확장]  (기존 banner_tracking.db 옆)
+    Tables:
+      citizen_reports (id, report_no, reported_at, location, reporter_*, category,
+                       ai_confidence, vlm_summary, status, assignee, reject_reason, ...)
+
+    ReportRepository → SQLite (Microsoft.Data.Sqlite 이미 사용 중)
+
+  [옵션 B — FastAPI REST 추가]  (backend/)
+    GET  /api/reports?filter=...
+    PATCH /api/reports/{id}/assign
+    PATCH /api/reports/{id}/reject
+    ※ WebSocket(/ws/alerts)와 별도. 연결구조 건드릴 때 backend만 추가.
+
+  [시민 신고 앱과의 관계]
+    현재 프로젝트에 시민 앱 없음 → Mock → 추후 POST /api/reports 로 신고 유입 가정
+
+  [완료 기준]
+    □ Mock 제거 가능, DB CRUD 동작, 앱 재시작 후 데이터 유지
+
+
+================================================================================
+13. 파일 생성 목록 (체크리스트)
+================================================================================
+
+  Views/
+    □ ShellWindow.xaml(.cs)
+    □ MonitoringView.xaml(.cs)        ← 기존 MainWindow 이전
+    □ ReportListView.xaml(.cs)
+    □ ReportDetailPanel.xaml(.cs)
+    □ RejectReasonDialog.xaml(.cs)
+
+  ViewModels/
+    □ ShellViewModel.cs
+    □ ReportListViewModel.cs
+    □ (기존 MainViewModel → MonitoringViewModel 리네임 검토)
+
+  Models/
+    □ ReportItemModel.cs
+    □ ReportStatus.cs, ReportCategory.cs
+    □ ReportFilterModel.cs
+
+  Services/
+    □ IReportRepository.cs
+    □ MockReportRepository.cs
+    □ IExcelExportService.cs
+    □ ExcelExportService.cs
+
+  Converters/
+    □ CategoryToBrushConverter.cs
+    □ ReportStatusToBrushConverter.cs
+    □ AiConfidenceToBrushConverter.cs
+
+  수정/
+    □ App.xaml.cs          → ShellWindow 시작
+    □ BannerGuardSystem.csproj → ClosedXML 패키지 (Phase H)
+
+
+================================================================================
+14. 피그마(신고접수목록.png) ↔ 구현 매핑
+================================================================================
+
+  | 피그마 요소              | 구현 위치                          |
+  |-------------------------|-----------------------------------|
+  | 좌측 5메뉴              | ShellWindow Sidebar               |
+  | KPI 5카드               | ReportListView 상단               |
+  | 검색창                  | ReportListViewModel.SearchText    |
+  | 엑셀/새로고침           | Command 2개                       |
+  | 10컬럼 테이블           | DataGrid + DataTemplate           |
+  | 유형 컬러 pill          | CategoryToBrushConverter          |
+  | AI % ProgressBar        | DataGrid 컬럼                     |
+  | 상태 pill               | ReportStatusToBrushConverter      |
+  | 상태별 액션 버튼        | DataTrigger DataTemplate          |
+  | 페이지네이션            | ReportListViewModel 페이징        |
+  | (미래) 하단 상세+지도   | ReportDetailPanel                 |
+
+
+================================================================================
+15. 작업 순서 (오늘·이번 주 추천)
+================================================================================
+
+  [Day 1]  ← Shell 이미 있으므로 바로 ReportList 착수
+    Phase A-2: NavigateCommand ReportList 분기 + ReportListView 빈 껍데기
+    Phase B: Model + Mock 10건 + ReportListViewModel 골격
+
+  [Day 2]
+    Phase C: ReportListView KPI + DataGrid 전체 컬럼
+    Converters 3개
+
+  [Day 3]
+    Phase D: 액션 버튼 + 접수/상태 변경
+    Phase E-1: 하단 패널 (지도 placeholder)
+
+  [Day 4]
+    Phase F: 반려 팝업
+    Phase G: 필터 기본 (상태·유형)
+
+  [Day 5]
+    Phase H: 엑셀
+    피그마 픽셀 맞춤 + dotnet build + 시연 리허설
+
+  [이후]
+    Phase J 실DB, Phase I 지도, 단속처리현황 화면
+
+
+================================================================================
+16. 다른 AI / 개발자에게 줄 때 명령문
+================================================================================
+
+  신고접수목록_구현계획.txt Phase A부터 순서대로 구현하라.
+  MVVM.txt 원칙 준수. 연결구조(필독).txt의 BackendManager/WebSocket은
+  Monitoring 화면에만 유지하고 신고 목록은 Repository 패턴으로 분리하라.
+  피그마: 신고접수목록.png 레이아웃 참고.
+  각 Phase 완료 시 dotnet build 확인.
+
+
+================================================================================
+  끝
+================================================================================

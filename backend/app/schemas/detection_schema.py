@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional
+from typing import List, Literal, Optional
 
 class BBox(BaseModel):
     X: int
@@ -25,7 +25,19 @@ class BannerDetectionEvent(BaseModel):
     RepeatCount: int
     CropImageUri: str
     CroppedImageBase64: Optional[str] = ""
+    FullImageBase64: Optional[str] = ""
     StatusCode: str = "ILLEGAL_COMMERCIAL"
+
+
+class ChannelDetectionBatch(BaseModel):
+    """channel_batch=CCTV(MP4), vlm_image_batch=VLM검증(WPF/image)."""
+    MessageType: Literal["channel_batch", "vlm_image_batch"] = "channel_batch"
+    CctvId: str
+    FrameWidth: int = 1920
+    FrameHeight: int = 1080
+    SourceImage: str = ""
+    Detections: List[BannerDetectionEvent] = []
+
 
 class BannerAlert(BaseModel):
     AlertId: str
@@ -42,6 +54,7 @@ class BannerAlert(BaseModel):
     Stage: int  # 1=YOLO, 2=OCR, 3=VLM
     CroppedImagePath: str
     CroppedImageBase64: str = ""
+    FullImageBase64: str = ""
     IsRecurring: bool = False
     RecurrenceCount: int = 0
     RecurrenceDetail: str = ""

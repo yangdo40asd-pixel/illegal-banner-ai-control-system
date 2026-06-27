@@ -1,0 +1,309 @@
+================================================================================
+  MVVM — BannerGuardSystem 리팩터링 작업 지시서
+  대상 프로젝트: D:\138.종합 민원 이미지 AI데이터\BannerGuardSystem
+  용도: 다른 AI에게 MVVM 정리·개선 작업을 요청할 때 이 문서 전체를 전달할 것
+  연동 보존: 반드시 함께 읽을 것 → 연결구조(필독).txt (서버/GPU/WebSocket 건드리지 말 것)
+  작성일: 2026-06-25
+================================================================================
+
+
+================================================================================
+1. MVVM이란? (작업 AI가 먼저 이해할 정의)
+================================================================================
+
+MVVM = Model · View · ViewModel 세 레이어로 UI와 로직을 나누는 WPF 패턴.
+
+  [View]        화면만. XAML + 최소 code-behind.
+                사용자 입력은 Binding/Command로 ViewModel에 전달.
+                비즈니스 로직·DB·네트워크 코드 금지.
+
+  [ViewModel]   화면에 보여줄 상태(Property) + 사용자 동작(Command).
+                View를 직접 참조하지 않음 (Window, Button 타입 사용 금지).
+                Model·Service를 조합해 View용 데이터 제공.
+                INotifyPropertyChanged + ObservableCollection + ICommand 필수.
+
+  [Model]       데이터·도메인 규칙. UI(WPF) 타입 의존 금지.
+                Brush, Color, Visibility 등 WPF 네임스페이스 넣지 말 것.
+
+  [Service]     MVVM 밖 계층. WebSocket, DB, PDF, 백엔드 기동 등.
+                ViewModel이 인터페이스로 주입받아 사용 (DI 권장).
+
+핵심 원칙 4가지:
+  ① View는 ViewModel만 안다 (DataContext Binding)
+  ② ViewModel은 View를 모른다
+  ③ View code-behind는 얇게 (입력 라우팅·순수 View 로직만)
+  ④ Model은 UI 독립
+
+
+================================================================================
+2. 현재 프로젝트 MVVM 준수 현황 (사실 기준)
+================================================================================
+
+[잘 되어 있는 것 — 유지·확장]
+  · App.xaml.cs에서 MainViewModel 생성 후 DataContext 설정
+  · MainWindow.xaml 대부분 {Binding} 사용
+  · BaseViewModel: INotifyPropertyChanged, RelayCommand, SimpleCommand
+  · MainViewModel: ObservableCollection(Channels, AlertFeed, HistoryLog)
+  · ICommand: ApproveCommand, DismissCommand, SelectChannelCommand
+  · Service 분리: WebSocketService, DatabaseService, PdfReportService, BackendManager
+
+[MVVM 위반·미흡 — 수정 대상]
+  · ViewModel 1개 독점: MainViewModel.cs (~500줄), Views/ 폴더 비어 있음
+  · Model UI 오염: BannerDetectionEventDto.cs에 SolidColorBrush VerdictColor
+  · Fat ViewModel: PDF 생성·DB·WebSocket 이벤트·텔레메트리·채널 로드 전부 한 클래스
+  · DI 없음: MainViewModel 생성자에서 new WebSocketService() 등 직접 생성
+  · Command 미연결: Approve/Dismiss 버튼 없음(키보드만), ToggleRoiModeCommand UI 없음
+  · View code-behind 과다: CctvChannelControl.xaml.cs (~240줄, Canvas 박스·ROI 전부)
+  · MainWindow.xaml.cs KeyDown → Command 호출 (가능하면 InputBinding으로 이동)
+  · CommunityToolkit.Mvvm 미사용 (직접 RelayCommand 구현 — 유지해도 됨, 통일만 할 것)
+
+
+================================================================================
+3. 목표 아키텍처 (이렇게 정리해야 "MVVM 잘 준수"라고 말할 수 있음)
+================================================================================
+
+BannerGuardSystem/
+├── Views/                          ← 화면 단위 XAML만
+│   ├── MainWindow.xaml(.cs)        ← Shell, 패널 배치만
+│   ├── DashboardView.xaml(.cs)     ← 구역 A+B+C 통합 또는 분리
+│   ├── AlertFeedView.xaml(.cs)     ← 실시간 피드 (구역 C)
+│   └── (향후) SettingsView.xaml
+│
+├── ViewModels/
+│   ├── BaseViewModel.cs
+│   ├── MainViewModel.cs            ← 자식 VM 조합·네비게이션만 (얇게)
+│   ├── DashboardViewModel.cs       ← ActiveAlert, 3-Tier, 승인/기각
+│   ├── AlertFeedViewModel.cs       ← AlertFeed, 선택, 필터
+│   ├── CctvMonitorViewModel.cs     ← Channels, SelectedChannel
+│   └── (선택) TelemetryViewModel.cs ← CPU/RAM/GPU 표시
+│
+├── Models/                         ← UI 타입 없는 순수 데이터
+│   ├── BannerDetectionEvent.cs     ← SolidColorBrush 제거
+│   ├── CctvChannelModel.cs         ← MediaPlayer 제거 → VM/Service가 보유
+│   └── ...
+│
+├── Services/                       ← 기존 유지, 인터페이스 추가
+│   ├── IWebSocketService.cs
+│   ├── IDatabaseService.cs
+│   ├── IVideoPlaybackService.cs    ← LibVLC 래핑 (CctvChannel에서 분리)
+│   └── ...
+│
+├── Converters/                     ← View 전용 값 변환
+│   ├── ImageLoaderConverter.cs
+│   ├── VerdictColorConverter.cs    ← StatusCode → Brush (Model에서 이전)
+│   └── ...
+│
+└── App.xaml.cs                     ← Composition Root: DI·VM 생성·DataContext
+
+
+================================================================================
+4. 레이어별 수정 규칙 (작업 AI 필수 준수)
+================================================================================
+
+─── 4-1. Model 수정 규칙 ───
+
+  [현재] BannerDetectionEventDto.cs
+    · VerdictColor → SolidColorBrush 반환 (WPF 의존)  ← 제거
+
+  [변경 후]
+    · Models/BannerDetectionEvent.cs (또는 Dto 리네임)
+      - string StatusCode
+      - string VerdictLabel      // "⛔ 불법 의심"
+      - double Confidence
+      - string CroppedImageBase64
+      - BBox BoundingBox
+      - (WPF 타입 0개)
+
+  [View 표시]
+    · Converters/VerdictColorConverter.cs
+      StatusCode → Brush (XAML에서 Converter={StaticResource ...})
+
+  판단 기준: Models/ 폴더에 using System.Windows.* 가 없어야 함.
+
+
+─── 4-2. ViewModel 수정 규칙 ───
+
+  MainViewModel 역할 축소:
+    · 자식 ViewModel 프로퍼티만 노출:
+        public DashboardViewModel Dashboard { get; }
+        public CctvMonitorViewModel Monitor { get; }
+        public AlertFeedViewModel Feed { get; }
+    · WebSocket OnAlertReceived는 MainViewModel이 받아 자식 VM에 분배
+    · 텔레메트리는 TelemetryViewModel로 분리
+
+  각 ViewModel:
+    · public 속성 + OnPropertyChanged
+    · public ICommand 속성
+    · async 작업은 async/await, UI 갱신은 RunOnUi 또는 Dispatcher
+    · 절대 new MainWindow(), MessageBox 직접 호출 지양 (IDialogService 도입 선택)
+
+  Command UI 연결 필수:
+    · ApproveCommand  → XAML Button "단속 확정"
+    · DismissCommand  → XAML Button "오탐 기각"
+    · ToggleRoiModeCommand → XAML ToggleButton "ROI 모드"
+    · SelectChannelCommand → 이미 RadioButton 연결됨 (유지)
+
+  생성자 DI (최소 인터페이스):
+    public MainViewModel(
+        IWebSocketService ws,
+        IDatabaseService db,
+        IPdfReportService pdf)
+    App.xaml.cs에서 구현체 주입.
+
+
+─── 4-3. View 수정 규칙 ───
+
+  MainWindow.xaml:
+    · 큰 덩어리를 UserControl로 분리 권장
+    · 피그마 시안 반영 시 Binding 경로만 깨지 않게 주의
+    · 버튼은 Click 이벤트 금지 → Command Binding
+
+  MainWindow.xaml.cs:
+    · InitializeComponent() + (선택) InputBindings 만
+    · KeyDown 핸들러 → 아래 XAML로 이전:
+        <Window.InputBindings>
+          <KeyBinding Key="Space" Command="{Binding Dashboard.ApproveCommand}"/>
+          <KeyBinding Key="Escape" Command="{Binding Dashboard.DismissCommand}"/>
+        </Window.InputBindings>
+
+  CctvChannelControl.xaml.cs 리팩터링 (중요):
+    [현재 문제] UpdateBoundingBox(), ROI Mouse 이벤트가 code-behind에 240줄
+
+    [목표]
+    · 순수 View 로직만 code-behind: Canvas 좌표 계산, Draw 호출
+    · 상태(CurrentAlert, Status)는 Binding으로 UserControl DataContext = CctvChannel VM
+    · 또는 Attached Behavior / IBoundingBoxRenderer 서비스로 분리
+    · ROI 완료 좌표는 ViewModel 프로퍼티 ObservableCollection<RoiRect>에 추가
+
+    최소 목표(1차): ViewModel에서 Alert/Channel 상태만 Binding, 그리기는 code-behind 유지하되
+                    비즈니스 판단 로직은 ViewModel로 이전.
+
+
+─── 4-4. Service — 건드려도 되는 것 / 안 되는 것 ───
+
+  [건드리지 말 것 — 연결구조(필독).txt 참고]
+    · BackendManager.cs 프로세스 기동 로직
+    · WebSocketService 수신·JSON 역직렬화 핵심
+    · AppSettings.WsUrl = ws://localhost:8000/ws/alerts
+    · Python backend 쪽 파일
+
+  [인터페이스 래핑만 허용]
+    · IWebSocketService : 기존 WebSocketService 래핑
+    · IDatabaseService : 기존 DatabaseService 래핑
+    · 구현 내부 로직 변경 최소화
+
+
+================================================================================
+5. 단계별 작업 순서 (다른 AI는 이 순서로 진행할 것)
+================================================================================
+
+  Phase 1 — Model 정리 (연결 안 깨짐, 독립 작업)
+  ─────────────────────────────────────────────
+  □ BannerDetectionEventDto에서 SolidColorBrush·WPF 의존 제거
+  □ VerdictColorConverter, VerdictIconConverter 추가
+  □ XAML Binding 경로 수정 (ActiveAlert.StatusCode + Converter)
+  □ 빌드·실행·WebSocket 수신 확인
+
+  Phase 2 — Command·View 연결 (UI MVVM 완성도 즉시 상승)
+  ─────────────────────────────────────────────
+  □ MainWindow에 단속 확정/기각 버튼 Command Binding
+  □ InputBindings로 Space/Esc 이전
+  □ ToggleRoiMode 버튼 연결
+  □ ConnectionStatus LED를 IsConnected Binding
+
+  Phase 3 — ViewModel 분리 (Fat VM 해소)
+  ─────────────────────────────────────────────
+  □ AlertFeedViewModel 분리 (AlertFeed, ActiveAlert, SelectAlert)
+  □ CctvMonitorViewModel 분리 (Channels, SelectedChannel)
+  □ DashboardViewModel 분리 (3-Tier 표시, Approve/Dismiss)
+  □ MainViewModel은 조합·WebSocket 분배만
+  □ MainWindow DataContext 구조 업데이트
+
+  Phase 4 — DI 도입 (선택, 시험 가산점)
+  ─────────────────────────────────────────────
+  □ IWebSocketService, IDatabaseService 인터페이스
+  □ App.xaml.cs Composition Root에서 주입
+  □ (선택) Microsoft.Extensions.DependencyInjection 패키지
+
+  Phase 5 — CctvChannelControl 정리 (시간 있을 때)
+  ─────────────────────────────────────────────
+  □ CctvChannel에서 MediaPlayer를 VideoPlaybackService로 이동
+  □ BoundingBox 오버레이 로직 Behavior 또는 전용 클래스 분리
+  □ Views/Controls/CctvChannelControl 유지
+
+  ※ Phase 1~2만 해도 "MVVM 잘 적용" 체감 크게 상승.
+  ※ Phase 3까지 하면 시험·발표에서 자신 있게 설명 가능.
+
+
+================================================================================
+6. 피그마 UI 반영 시 MVVM 체크리스트
+================================================================================
+
+  새 UI 요소 추가할 때마다:
+  □ 버튼 → Command Binding 있는가? (Click= 금지)
+  □ 텍스트/숫자 → ViewModel Property Binding 있는가?
+  □ 목록 → ObservableCollection + ItemsSource 있는가?
+  □ 이미지 → Converter 또는 ViewModel Uri/Base64 Property 있는가?
+  □ 색/아이콘 → Model 문자열 코드 + Converter 있는가?
+  □ code-behind에 DB/네트워크/판단 로직 들어가지 않았는가?
+
+
+================================================================================
+7. 완료 판정 기준 (작업 AI가 스스로 검증)
+================================================================================
+
+  [필수 통과]
+  □ dotnet build BannerGuardSystem.sln -c Release 성공
+  □ run.bat 실행 → WebSocket 알림 수신 → 피드 갱신
+  □ 단속 확정/기각이 Button + Command로 동작
+  □ Models/ 폴더에 System.Windows.Media 참조 없음
+  □ MainViewModel 300줄 이하 또는 자식 VM 2개 이상 분리
+  □ backend_manager.log 에 연결 오류 없음
+
+  [권장 통과]
+  □ MainWindow.xaml.cs 30줄 이하
+  □ CctvChannelControl 비즈니스 로직 없음
+  □ IWebSocketService 인터페이스 존재
+
+
+================================================================================
+8. 발표·시험용 한 줄 (리팩터링 후 이렇게 말할 수 있어야 함)
+================================================================================
+
+  "View(XAML)는 Binding만 담당하고, 상태와 동작은 ViewModel의 Property·Command가
+   제공하며, Model은 WPF와 무관한 순수 데이터입니다. WebSocket·DB·PDF는
+   Service 레이어로 분리했고, ViewModel은 Service 인터페이스만 의존합니다."
+
+
+================================================================================
+9. 작업 AI에게 주는 명령문 (복사해서 그대로 사용)
+================================================================================
+
+  다음 작업을 수행하라.
+
+  1. D:\138.종합 민원 이미지 AI데이터\BannerGuardSystem 을 MVVM 원칙에 맞게
+     리팩터링한다.
+
+  2. 반드시 먼저 읽을 것:
+     - MVVM.txt (이 문서)
+     - 연결구조(필독).txt (서버/WebSocket/GPU 연결 보존)
+
+  3. 우선순위: Phase 1 → Phase 2 → Phase 3 순서. Phase 4~5는 시간 있을 때.
+
+  4. 절대 변경 금지:
+     - BackendManager.cs 핵심 기동 로직
+     - WebSocketService JSON 수신·역직렬화
+     - ws://localhost:8000/ws/alerts
+     - backend/ Python 코드
+     - D:\138.종합 민원 이미지 AI데이터 하드코딩 경로 (일괄 변경 없이 유지)
+
+  5. 피그마 UI 시안 반영 시 Binding·Command 구조를 깨지 말 것.
+
+  6. 각 Phase 완료 후 dotnet build 및 run.bat 동작 확인.
+
+  7. 변경 파일 목록과 Before/After MVVM 준수 항목을 요약 보고할 것.
+
+
+================================================================================
+  끝
+================================================================================

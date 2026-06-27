@@ -4,6 +4,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using BannerGuardSystem.Models;
 
 namespace BannerGuardSystem.Services;
@@ -19,6 +20,8 @@ public class WebSocketService : IDisposable
     private const int MaxRetryDelayMs = 30000;
 
     public event Action<BannerDetectionEventDto>? OnAlertReceived;
+    public event Action<ChannelDetectionBatchDto>? OnChannelBatchReceived;
+    public event Action<ChannelDetectionBatchDto>? OnVlmImageBatchReceived;
     public event Action<bool>? ConnectionChanged;
 
     public bool IsConnected => _isConnected;
@@ -78,7 +81,7 @@ public class WebSocketService : IDisposable
 
     private async Task ReceiveLoopAsync(CancellationToken ct)
     {
-        var buffer = new byte[64 * 1024]; // 64KB buffer for large Base64 images
+        var buffer = new byte[2 * 1024 * 1024]; // 2MB — 리사이즈된 FullImageBase64 청크 수신용
         var sb = new StringBuilder();
 
         while (!ct.IsCancellationRequested && _ws != null && _ws.State == WebSocketState.Open)
@@ -110,11 +113,35 @@ public class WebSocketService : IDisposable
                 {
                     try
                     {
-                        var alertDto = JsonConvert.DeserializeObject<BannerDetectionEventDto>(json);
-                        if (alertDto != null)
+                        var token = JObject.Parse(json);
+                        var messageType = token["MessageType"]?.ToString();
+
+                        if (messageType == "channel_batch")
                         {
-                            BackendManager.Log($"[WebSocket] Received alert event: ID={alertDto.Id}, CCTV={alertDto.CctvId}, HasBanner={alertDto.HasBanner}");
-                            OnAlertReceived?.Invoke(alertDto);
+                            var batch = token.ToObject<ChannelDetectionBatchDto>();
+                            if (batch != null && batch.Detections != null)
+                            {
+                                BackendManager.Log($"[WebSocket] Channel batch: CCTV={batch.CctvId}, Count={batch.Detections.Count}, Frame={batch.FrameWidth}x{batch.FrameHeight}");
+                                OnChannelBatchReceived?.Invoke(batch);
+                            }
+                        }
+                        else if (messageType == "vlm_image_batch")
+                        {
+                            var batch = token.ToObject<ChannelDetectionBatchDto>();
+                            if (batch != null && batch.Detections != null)
+                            {
+                                BackendManager.Log($"[WebSocket] VLM image batch: Source={batch.SourceImage}, CCTV={batch.CctvId}, Count={batch.Detections.Count}, Frame={batch.FrameWidth}x{batch.FrameHeight}");
+                                OnVlmImageBatchReceived?.Invoke(batch);
+                            }
+                        }
+                        else
+                        {
+                            var alertDto = token.ToObject<BannerDetectionEventDto>();
+                            if (alertDto != null)
+                            {
+                                BackendManager.Log($"[WebSocket] Received alert event: ID={alertDto.Id}, CCTV={alertDto.CctvId}, HasBanner={alertDto.HasBanner}");
+                                OnAlertReceived?.Invoke(alertDto);
+                            }
                         }
                     }
                     catch (JsonException ex)
@@ -164,6 +191,24 @@ public class WebSocketService : IDisposable
         
         _isConnected = false;
         ConnectionChanged?.Invoke(false);
+    }
+
+    public async Task SendCommandAsync(string command, object value)
+    {
+        if (_ws != null && _ws.State == WebSocketState.Open)
+        {
+            try
+            {
+                var payload = new { command = command, value = value };
+                var json = JsonConvert.SerializeObject(payload);
+                var bytes = Encoding.UTF8.GetBytes(json);
+                await _ws.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                BackendManager.Log($"[WebSocket-Err] Send command failed: {ex.Message}");
+            }
+        }
     }
 
     public void Dispose()

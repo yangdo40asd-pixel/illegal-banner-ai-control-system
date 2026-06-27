@@ -13,19 +13,7 @@ public class DatabaseService : IDisposable
 
     public DatabaseService(string? dbPath = null)
     {
-        string defaultPath = @"D:\138.종합 민원 이미지 AI데이터\inference_test\banner_tracking.db";
-        if (string.IsNullOrEmpty(dbPath))
-        {
-            string? dir = Path.GetDirectoryName(defaultPath);
-            if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
-            {
-                dbPath = defaultPath;
-            }
-            else
-            {
-                dbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "banner_tracking.db");
-            }
-        }
+        dbPath ??= SqliteDbPath.ResolveBannerTrackingDb();
         _connectionString = $"Data Source={dbPath}";
     }
 

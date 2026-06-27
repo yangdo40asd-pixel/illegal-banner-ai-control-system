@@ -20,7 +20,7 @@ public class ViolationRecord
     public string CroppedImagePath { get; set; } = string.Empty;
     public string ConfirmedByUser { get; set; } = string.Empty;
     public string OfficerNote { get; set; } = string.Empty;
-    public string Status { get; set; } = "단속완료"; // 단속완료 | 과태료부과 | 철거완료
+    public string Status { get; set; } = "단속완료"; // 단속완료 | 행정처분 | 철거완료
     public DateTime CreatedAt { get; set; } = DateTime.Now;
 
     public double Similarity { get; set; }
@@ -35,7 +35,7 @@ public class ViolationRecord
     public SolidColorBrush StatusColor => Status switch
     {
         "철거완료"   => new SolidColorBrush(Color.FromRgb(0x2E, 0xD5, 0x73)), // Green
-        "과태료부과" => new SolidColorBrush(Color.FromRgb(0xFF, 0xA5, 0x02)), // Orange
+        "행정처분" => new SolidColorBrush(Color.FromRgb(0xFF, 0xA5, 0x02)), // Orange
         _            => new SolidColorBrush(Color.FromRgb(0xFF, 0x47, 0x57))  // Red
     };
 }

@@ -1,0 +1,20 @@
+ 백엔드 — MP4 프레임 기준 추론 + 배치 전송
+• 시뮬레이터가 Assets JPG 대신 채널별 MP4 첫 프레임(1920×1080)으로 YOLO 추론
+• 채널마다 channel_batch 메시지 1건으로 탐지 전체 전송 (덮어쓰기 없음)
+• 겹치는 박스 IoU 0.45 이상 중복 제거 (4번 채널 3개 → 2개)
+
+CCTV_04 MP4 검증 결과:
+• 박스1: 865×252 (프레임 10.5%)
+• 박스2: 658×173 (프레임 5.5%)
+
+2. WPF — 채널당 다중 박스
+• CctvChannel.CurrentAlerts — 탐지 N개 저장
+• OverlayFrameWidth/Height — 1920×1080 좌표계
+• YoloBBoxOverlay — Alerts 바인딩으로 박스 N개 동시 렌더
+• WebSocketService — channel_batch 수신 처리
+• MainViewModel — 배치 수신 시 채널 전체 갱신
+
+3. CCTV 그리드
+• MP4 계속 재생
+• 탐지 시 빨간 YOLO 박스 여러 개 오버레이
+• 좌표 = MP4 프레임 픽셀 (Uniform 매핑)
