@@ -1,23 +1,28 @@
+using System;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Windows;
 using System.Windows.Input;
 using BannerGuardSystem.Models;
+using BannerGuardSystem.Services;
 
 namespace BannerGuardSystem.ViewModels;
 
 public class EnforcementStatusViewModel : BaseViewModel
 {
+    private readonly DatabaseService _db;
     private List<EnforcementRecord> _allRecords = [];
     private string _searchText = string.Empty;
     private EnforcementRecord? _selectedRecord;
-    private string _mapQuery = "서울특별시 강남구 역삼동";
+    private string _mapQuery = "인천광역시";
 
     public event Action<EnforcementRecord>? DetailDialogRequested;
 
-    public EnforcementStatusViewModel()
+    public EnforcementStatusViewModel(DatabaseService db)
     {
+        _db = db;
         Records = new ObservableCollection<EnforcementRecord>();
-        ViolatorHistory = new ObservableCollection<ViolatorPastRecord>();
+        SimilarityRecords = new ObservableCollection<SimilarEnforcementRecord>();
 
         SearchCommand = new SimpleCommand(ApplyFilter);
         ExportExcelCommand = new SimpleCommand(OnExportExcel);
@@ -26,21 +31,15 @@ public class EnforcementStatusViewModel : BaseViewModel
         SecondaryActionCommand = new RelayCommand(OnSecondaryAction);
         CloseDialogCommand = new SimpleCommand(() => IsDialogOpen = false);
 
-        LoadMockData();
-        ApplyFilter();
+        Refresh();
     }
 
     public ObservableCollection<EnforcementRecord> Records { get; }
-    public ObservableCollection<ViolatorPastRecord> ViolatorHistory { get; }
+    public ObservableCollection<SimilarEnforcementRecord> SimilarityRecords { get; }
 
-    public int TodayCount { get; private set; } = 12;
-    public string TodayDeltaText { get; } = "전일 대비 +32%";
-    public int WeekCount { get; private set; } = 47;
-    public string TotalFineText { get; } = "3,240만원";
-    public int AppealCount { get; private set; } = 2;
-    public string AppealSubText { get; } = "처리중 1건";
-    public string UnpaidFineText { get; } = "480만원";
-    public string CollectionRateText { get; } = "수납률 85.2%";
+    public int TodayCount { get; private set; }
+    public string TodayDeltaText { get; private set; } = "—";
+    public int WeekCount { get; private set; }
 
     public string SearchText
     {
@@ -59,7 +58,7 @@ public class EnforcementStatusViewModel : BaseViewModel
         {
             if (!SetField(ref _selectedRecord, value))
                 return;
-            UpdateViolatorPanel();
+            UpdateSimilarityPanel();
             if (value != null && !string.IsNullOrEmpty(value.MapQuery))
                 MapQuery = value.MapQuery;
         }
@@ -85,10 +84,13 @@ public class EnforcementStatusViewModel : BaseViewModel
         set => SetField(ref _dialogRecord, value);
     }
 
-    public string SelectedViolatorName => SelectedRecord?.ViolatorName ?? "—";
-    public string SelectedViolatorBusiness => SelectedRecord?.BusinessName ?? "";
-    public string SelectedRiskSummary => SelectedRecord?.RiskSummary ?? "이력 없음";
-    public bool HasHighRiskViolator => SelectedRecord?.IsHighRisk == true;
+    public string SimilaritySummary => SelectedRecord == null
+        ? "단속 건을 선택하면 유사 현수막을 검토합니다."
+        : SimilarityRecords.Count > 0
+            ? $"선택 건과 유사한 과거 단속 {SimilarityRecords.Count}건 (내용·키워드 기준)"
+            : "유사한 과거 단속 이력이 없습니다.";
+
+    public bool HasSimilarRecords => SimilarityRecords.Count > 0;
 
     public ICommand SearchCommand { get; }
     public ICommand ExportExcelCommand { get; }
@@ -97,95 +99,21 @@ public class EnforcementStatusViewModel : BaseViewModel
     public ICommand SecondaryActionCommand { get; }
     public ICommand CloseDialogCommand { get; }
 
-    private void LoadMockData()
+    public void Refresh()
     {
-        _allRecords =
-        [
-            new EnforcementRecord
-            {
-                EnforcementNo = "E-2026-0627-001",
-                DetectedAt = new DateTime(2026, 6, 27, 14, 10, 0),
-                Location = "강남구 역삼동 청담로 전봇대 #A-12",
-                MapQuery = "서울특별시 강남구 역삼동 청담로",
-                ViolationType = EnforcementViolationType.IllegalBanner,
-                ViolatorName = "김○○",
-                BusinessName = "○○부동산",
-                FineAmountManwon = 300,
-                Status = EnforcementProcessingStatus.FineImposed,
-                Assignee = "김무주",
-                PrimaryAction = "상세",
-                SecondaryAction = "독촉장",
-                IsHighRisk = true,
-                PastViolationCount = 3,
-                AccumulatedFineManwon = 900,
-                PastRecords =
-                [
-                    new ViolatorPastRecord { DetectedDate = new DateTime(2026, 3, 15), Location = "강남구 역삼동", ViolationType = "불법현수막", FineAmount = "300만원", PaymentStatus = "납부" },
-                    new ViolatorPastRecord { DetectedDate = new DateTime(2025, 11, 2), Location = "서초구 서초동", ViolationType = "불법현수막", FineAmount = "300만원", PaymentStatus = "납부" },
-                    new ViolatorPastRecord { DetectedDate = new DateTime(2024, 8, 20), Location = "강남구 논현동", ViolationType = "불법현수막", FineAmount = "300만원", PaymentStatus = "납부" }
-                ]
-            },
-            new EnforcementRecord
-            {
-                EnforcementNo = "E-2026-0626-015",
-                DetectedAt = new DateTime(2026, 6, 26, 23, 45, 0),
-                Location = "서초구 서초동 가로등 #B-07",
-                MapQuery = "서울특별시 서초구 서초동",
-                ViolationType = EnforcementViolationType.IllegalBanner,
-                ViolatorName = "박○○",
-                BusinessName = "○○학원",
-                FineAmountManwon = 200,
-                Status = EnforcementProcessingStatus.Appeal,
-                Assignee = "이주희",
-                PrimaryAction = "상세",
-                SecondaryAction = "심사"
-            },
-            new EnforcementRecord
-            {
-                EnforcementNo = "E-2026-0626-008",
-                DetectedAt = new DateTime(2026, 6, 26, 18, 20, 0),
-                Location = "송파구 잠실동 삼거리 밀집 지역",
-                MapQuery = "서울특별시 송파구 잠실동",
-                ViolationType = EnforcementViolationType.IllegalBanner,
-                ViolatorName = "최○○",
-                BusinessName = "○○마트",
-                FineAmountManwon = 150,
-                Status = EnforcementProcessingStatus.Delinquent,
-                Assignee = "김무주",
-                PrimaryAction = "독촉",
-                SecondaryAction = "접수"
-            },
-            new EnforcementRecord
-            {
-                EnforcementNo = "E-2026-0610-023",
-                DetectedAt = new DateTime(2026, 6, 10, 9, 15, 0),
-                Location = "마포구 홍대입구역 인근",
-                MapQuery = "서울특별시 마포구 홍대입구역",
-                ViolationType = EnforcementViolationType.IllegalBanner,
-                ViolatorName = "정○○",
-                BusinessName = "",
-                FineAmountManwon = 80,
-                Status = EnforcementProcessingStatus.Urgent,
-                Assignee = "박무주",
-                PrimaryAction = "상세",
-                SecondaryAction = "접수"
-            },
-            new EnforcementRecord
-            {
-                EnforcementNo = "E-2026-0608-011",
-                DetectedAt = new DateTime(2026, 6, 8, 11, 30, 0),
-                Location = "용산구 이태원동 #C-05",
-                MapQuery = "서울특별시 용산구 이태원동",
-                ViolationType = EnforcementViolationType.IllegalBanner,
-                ViolatorName = "한○○",
-                BusinessName = "○○카페",
-                FineAmountManwon = 250,
-                Status = EnforcementProcessingStatus.FineImposed,
-                Assignee = "이주희",
-                PrimaryAction = "상세",
-                SecondaryAction = "독촉장"
-            }
-        ];
+        _allRecords = _db.GetEnforcementRecords();
+        var kpi = _db.GetEnforcementKpi();
+        TodayCount = kpi.TodayCount;
+        TodayDeltaText = kpi.TodayDeltaText;
+        WeekCount = kpi.WeekCount;
+
+        OnPropertyChanged(nameof(TodayCount));
+        OnPropertyChanged(nameof(TodayDeltaText));
+        OnPropertyChanged(nameof(WeekCount));
+
+        ApplyFilter();
+        if (_allRecords.Count == 0)
+            MapQuery = "인천광역시";
     }
 
     private void ApplyFilter()
@@ -196,8 +124,8 @@ public class EnforcementStatusViewModel : BaseViewModel
             : _allRecords.Where(r =>
                 r.EnforcementNo.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                 r.Location.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                r.ViolatorName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                r.Assignee.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
+                r.BannerSummaryOneLine.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                r.OcrText.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
 
         Records.Clear();
         foreach (var item in filtered)
@@ -207,19 +135,45 @@ public class EnforcementStatusViewModel : BaseViewModel
             SelectedRecord = Records.FirstOrDefault();
     }
 
-    private void UpdateViolatorPanel()
+    private void UpdateSimilarityPanel()
     {
-        ViolatorHistory.Clear();
-        if (SelectedRecord?.PastRecords != null)
+        SimilarityRecords.Clear();
+        if (SelectedRecord == null)
         {
-            foreach (var past in SelectedRecord.PastRecords)
-                ViolatorHistory.Add(past);
+            NotifySimilarityProperties();
+            return;
         }
 
-        OnPropertyChanged(nameof(SelectedViolatorName));
-        OnPropertyChanged(nameof(SelectedViolatorBusiness));
-        OnPropertyChanged(nameof(SelectedRiskSummary));
-        OnPropertyChanged(nameof(HasHighRiskViolator));
+        var candidates = _allRecords
+            .Where(r => r.EnforcementNo != SelectedRecord.EnforcementNo)
+            .Select(r => new
+            {
+                Record = r,
+                Score = BannerSimilarityHelper.SimilarityPercent(SelectedRecord.OcrText, r.OcrText)
+            })
+            .Where(x => x.Score >= 25)
+            .OrderByDescending(x => x.Score)
+            .ThenByDescending(x => x.Record.DetectedAt)
+            .Take(12);
+
+        foreach (var item in candidates)
+        {
+            SimilarityRecords.Add(new SimilarEnforcementRecord
+            {
+                DetectedDate = item.Record.DetectedAt,
+                Location = item.Record.Location,
+                BannerSummary = item.Record.BannerSummaryOneLine,
+                SimilarityPercent = item.Score
+            });
+        }
+
+        NotifySimilarityProperties();
+    }
+
+    private void NotifySimilarityProperties()
+    {
+        OnPropertyChanged(nameof(SimilaritySummary));
+        OnPropertyChanged(nameof(HasSimilarRecords));
     }
 
     private void OnDetail(object? parameter)
@@ -245,7 +199,7 @@ public class EnforcementStatusViewModel : BaseViewModel
     private void OnExportExcel()
     {
         MessageBox.Show(
-            $"단속 현황 {_allRecords.Count}건을 엑셀로보냅니다.\n(데모: 실제 파일 생성은 추후 연동)",
+            $"단속 현황 {_allRecords.Count}건 (검증 긴급 연동 데이터)",
             "엑셀 다운로드",
             MessageBoxButton.OK,
             MessageBoxImage.Information);
@@ -253,7 +207,7 @@ public class EnforcementStatusViewModel : BaseViewModel
 
     private void OnPrint()
     {
-        MessageBox.Show("단속 현황 인쇄 미리보기를 준비합니다.\n(데모)", "인쇄",
+        MessageBox.Show($"단속 현황 {_allRecords.Count}건 인쇄 준비", "인쇄",
             MessageBoxButton.OK, MessageBoxImage.Information);
     }
 }

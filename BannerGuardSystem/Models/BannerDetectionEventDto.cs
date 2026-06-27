@@ -71,7 +71,20 @@ public class BannerDetectionEventDto : INotifyPropertyChanged
 
     // Repeat Offender Flags
     private bool _isRepeatOffender;
-    public bool IsRepeatOffender { get => _isRepeatOffender; set { if (_isRepeatOffender != value) { _isRepeatOffender = value; OnPropertyChanged(); } } }
+    public bool IsRepeatOffender
+    {
+        get => _isRepeatOffender;
+        set
+        {
+            if (_isRepeatOffender != value)
+            {
+                _isRepeatOffender = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IsEmergency));
+                OnPropertyChanged(nameof(PriorityLabel));
+            }
+        }
+    }
     
     private int _repeatCount;
     public int RepeatCount { get => _repeatCount; set { if (_repeatCount != value) { _repeatCount = value; OnPropertyChanged(); } } }
@@ -109,7 +122,16 @@ public class BannerDetectionEventDto : INotifyPropertyChanged
         FullImageBase64 = other.FullImageBase64;
         SourceImage = other.SourceImage;
         StatusCode = other.StatusCode;
+        OnPropertyChanged(nameof(IsEmergency));
+        OnPropertyChanged(nameof(PriorityLabel));
     }
+
+    /// <summary>긴급 Feed·알람 집계 기준 (VLM 분석 대기는 제외)</summary>
+    public bool IsEmergency =>
+        IsRepeatOffender
+        || StatusCode is "ILLEGAL_CONTENT" or "ILLEGAL_COMMERCIAL" or "MANUAL_REVIEW";
+
+    public string PriorityLabel => IsEmergency ? "긴급" : "일반";
 
     // UI Helpers matching MainWindow.xaml bindings to resolve binding errors
     public string CctvName => CctvId switch
@@ -134,7 +156,7 @@ public class BannerDetectionEventDto : INotifyPropertyChanged
         }
     }
 
-    private string _statusCode = "ILLEGAL_COMMERCIAL";
+    private string _statusCode = "PENDING_VLM";
     public string StatusCode 
     { 
         get => _statusCode; 
@@ -145,7 +167,9 @@ public class BannerDetectionEventDto : INotifyPropertyChanged
                 _statusCode = value; 
                 OnPropertyChanged(); 
                 OnPropertyChanged(nameof(VerdictColor)); 
-                OnPropertyChanged(nameof(VerdictIcon)); 
+                OnPropertyChanged(nameof(VerdictIcon));
+                OnPropertyChanged(nameof(IsEmergency));
+                OnPropertyChanged(nameof(PriorityLabel));
             } 
         } 
     }
@@ -164,45 +188,53 @@ public class BannerDetectionEventDto : INotifyPropertyChanged
                 => new(System.Windows.Media.Color.FromRgb(0x2E, 0xD5, 0x73)),
             "LEGAL_POLITICS"
                 => new(System.Windows.Media.Color.FromRgb(0x2E, 0x86, 0xDE)),
+            "PENDING_VLM"
+                => new(System.Windows.Media.Color.FromRgb(0x60, 0xA5, 0xFA)),
             "MANUAL_REVIEW"
                 => new(System.Windows.Media.Color.FromRgb(0xF5, 0x9E, 0x0B)),
             "ILLEGAL_CONTENT"
                 => new(System.Windows.Media.Color.FromRgb(0xDC, 0x26, 0x26)),
-            _ => new(System.Windows.Media.Color.FromRgb(0xFF, 0x47, 0x57))
+            "ILLEGAL_COMMERCIAL"
+                => new(System.Windows.Media.Color.FromRgb(0xFF, 0x47, 0x57)),
+            _ => new(System.Windows.Media.Color.FromRgb(0x94, 0xA3, 0xB8))
         };
 
     public string VerdictColorLegend => StatusCode switch
     {
-        "LEGAL_PUBLIC" => "합법 · 공익 안내",
-        "LEGAL_POLITICS" => "합법 · 정당/정치",
-        "LEGAL_COMMERCIAL" => "합법 · 상업 (허가/위치 별도 검토)",
-        "EXEMPT_ELECTION" => "합법 · 선거 면제",
-        "MANUAL_REVIEW" => "수동 검토 필요",
-        "ILLEGAL_CONTENT" => "불법 · 내용 위반",
-        _ => "불법 · 상업/무허가 의심"
+        "LEGAL_PUBLIC" => "공익성",
+        "LEGAL_POLITICS" => "정당",
+        "LEGAL_COMMERCIAL" => "상업",
+        "EXEMPT_ELECTION" => "정당 (선거)",
+        "PENDING_VLM" => "VLM 분석 대기",
+        "MANUAL_REVIEW" => "수동 검토",
+        "ILLEGAL_CONTENT" => "불법",
+        "ILLEGAL_COMMERCIAL" => "불법",
+        _ => "판정 미확정"
     };
 
-    public string VerdictIcon
-    {
-        get
+    public string VerdictIcon =>
+        StatusCode switch
         {
-            return StatusCode switch
-            {
-                "LEGAL_PUBLIC" => "🟢 공익 안내",
-                "LEGAL_POLITICS" => "🔵 정당 정책",
-                "EXEMPT_ELECTION" => "🟣 선거 운동",
-                _ => "⛔ 불법 의심"
-            };
-        }
-    }
+            "LEGAL_PUBLIC" => "🟢 공익성",
+            "LEGAL_POLITICS" => "🔵 정당",
+            "LEGAL_COMMERCIAL" => "🟡 상업",
+            "EXEMPT_ELECTION" => "🔵 정당",
+            "PENDING_VLM" => "⏳ 분석 중",
+            "MANUAL_REVIEW" => "⚠️ 수동 검토",
+            "ILLEGAL_CONTENT" => "⛔ 불법",
+            "ILLEGAL_COMMERCIAL" => "⛔ 불법",
+            _ => "❓ 미확정"
+        };
 
     public string AiReason
     {
         get
         {
-            if (IsVlmTriggered && !string.IsNullOrEmpty(VlmAnalysis))
+            if (!string.IsNullOrEmpty(VlmAnalysis) && VlmAnalysis != "AI 분석 중...")
                 return VlmAnalysis;
-            return "AI 분석에 의한 불법 의심 광고물 탐지";
+            if (!IsVlmTriggered)
+                return "YOLO 탐지 완료 — VLM 문자·맥락 분석 대기 중";
+            return "AI 분석 결과 대기 중";
         }
     }
 
@@ -240,14 +272,10 @@ public class BannerDetectionEventDto : INotifyPropertyChanged
             if (OcrConfidence > 0)
                 return $"{NormalizeConfidencePercent(OcrConfidence):F1}%";
 
-            if (IsVlmTriggered || !string.IsNullOrEmpty(VlmAnalysis))
-            {
-                double vlmOcrConf = (Confidence > 0 ? Confidence : 0.952) + 0.045;
-                if (vlmOcrConf > 0.999) vlmOcrConf = 0.995;
-                return $"{NormalizeConfidencePercent(vlmOcrConf):F1}%";
-            }
+            if (!IsVlmTriggered)
+                return "분석 중";
 
-            return "생략됨 (N/A)";
+            return "—";
         }
     }
 

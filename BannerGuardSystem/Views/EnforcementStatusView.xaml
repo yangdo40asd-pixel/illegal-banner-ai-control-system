@@ -13,6 +13,7 @@
 
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolVis"/>
+        <converters:InverseBoolToVisibilityConverter x:Key="InvBoolVis"/>
         <converters:EnforcementStatusToBackgroundConverter x:Key="StatusBgConverter"/>
         <converters:EnforcementStatusToForegroundConverter x:Key="StatusFgConverter"/>
         <converters:EnforcementStatusToRowBackgroundConverter x:Key="RowBgConverter"/>
@@ -61,8 +62,8 @@
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
-            <!-- Step 3: KPI Cards -->
-            <UniformGrid Grid.Row="0" Columns="5">
+            <!-- KPI Cards -->
+            <UniformGrid Grid.Row="0" Columns="2">
                 <Border Background="White" CornerRadius="8" Margin="0,0,6,0" Padding="18,14">
                     <Border.Effect><DropShadowEffect BlurRadius="8" ShadowDepth="1" Color="#C0C0C0" Opacity="0.25"/></Border.Effect>
                     <StackPanel>
@@ -71,34 +72,11 @@
                         <TextBlock Text="{Binding TodayDeltaText}" FontSize="11" Foreground="#16A34A" Margin="0,2,0,0"/>
                     </StackPanel>
                 </Border>
-                <Border Background="White" CornerRadius="8" Margin="3,0" Padding="18,14">
+                <Border Background="White" CornerRadius="8" Margin="6,0,0,0" Padding="18,14">
                     <Border.Effect><DropShadowEffect BlurRadius="8" ShadowDepth="1" Color="#C0C0C0" Opacity="0.25"/></Border.Effect>
                     <StackPanel>
                         <TextBlock Text="금주 단속" FontSize="12" Foreground="#6B7280"/>
                         <TextBlock Text="{Binding WeekCount}" FontSize="28" FontWeight="Bold" Foreground="#1E40AF"/>
-                    </StackPanel>
-                </Border>
-                <Border Background="White" CornerRadius="8" Margin="3,0" Padding="18,14">
-                    <Border.Effect><DropShadowEffect BlurRadius="8" ShadowDepth="1" Color="#C0C0C0" Opacity="0.25"/></Border.Effect>
-                    <StackPanel>
-                        <TextBlock Text="과태료 부과" FontSize="12" Foreground="#6B7280"/>
-                        <TextBlock Text="{Binding TotalFineText}" FontSize="28" FontWeight="Bold" Foreground="#DC2626"/>
-                    </StackPanel>
-                </Border>
-                <Border Background="White" CornerRadius="8" Margin="3,0" Padding="18,14">
-                    <Border.Effect><DropShadowEffect BlurRadius="8" ShadowDepth="1" Color="#C0C0C0" Opacity="0.25"/></Border.Effect>
-                    <StackPanel>
-                        <TextBlock Text="이의신청" FontSize="12" Foreground="#6B7280"/>
-                        <TextBlock Text="{Binding AppealCount}" FontSize="28" FontWeight="Bold" Foreground="#2563EB"/>
-                        <TextBlock Text="{Binding AppealSubText}" FontSize="11" Foreground="#6B7280" Margin="0,2,0,0"/>
-                    </StackPanel>
-                </Border>
-                <Border Background="White" CornerRadius="8" Margin="6,0,0,0" Padding="18,14">
-                    <Border.Effect><DropShadowEffect BlurRadius="8" ShadowDepth="1" Color="#C0C0C0" Opacity="0.25"/></Border.Effect>
-                    <StackPanel>
-                        <TextBlock Text="미납" FontSize="12" Foreground="#6B7280"/>
-                        <TextBlock Text="{Binding UnpaidFineText}" FontSize="28" FontWeight="Bold" Foreground="#EA580C"/>
-                        <TextBlock Text="{Binding CollectionRateText}" FontSize="11" Foreground="#6B7280" Margin="0,2,0,0"/>
                     </StackPanel>
                 </Border>
             </UniformGrid>
@@ -145,22 +123,18 @@
                                 <ColumnDefinition Width="130"/>
                                 <ColumnDefinition Width="120"/>
                                 <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="2*"/>
                                 <ColumnDefinition Width="110"/>
-                                <ColumnDefinition Width="150"/>
-                                <ColumnDefinition Width="80"/>
                                 <ColumnDefinition Width="90"/>
-                                <ColumnDefinition Width="80"/>
                                 <ColumnDefinition Width="130"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="단속번호" FontWeight="SemiBold" FontSize="11" Foreground="#6B7280"/>
                             <TextBlock Grid.Column="1" Text="적발일시" FontWeight="SemiBold" FontSize="11" Foreground="#6B7280"/>
-                            <TextBlock Grid.Column="2" Text="위치" FontWeight="SemiBold" FontSize="11" Foreground="#6B7280"/>
-                            <TextBlock Grid.Column="3" Text="위반유형" FontWeight="SemiBold" FontSize="11" Foreground="#6B7280" HorizontalAlignment="Center"/>
-                            <TextBlock Grid.Column="4" Text="위반자" FontWeight="SemiBold" FontSize="11" Foreground="#6B7280"/>
-                            <TextBlock Grid.Column="5" Text="과태료" FontWeight="SemiBold" FontSize="11" Foreground="#6B7280" HorizontalAlignment="Center"/>
-                            <TextBlock Grid.Column="6" Text="처리상태" FontWeight="SemiBold" FontSize="11" Foreground="#6B7280" HorizontalAlignment="Center"/>
-                            <TextBlock Grid.Column="7" Text="담당자" FontWeight="SemiBold" FontSize="11" Foreground="#6B7280" HorizontalAlignment="Center"/>
-                            <TextBlock Grid.Column="8" Text="액션" FontWeight="SemiBold" FontSize="11" Foreground="#6B7280" HorizontalAlignment="Center"/>
+                            <TextBlock Grid.Column="2" Text="단속위치" FontWeight="SemiBold" FontSize="11" Foreground="#6B7280"/>
+                            <TextBlock Grid.Column="3" Text="현수막 내용 (한줄)" FontWeight="SemiBold" FontSize="11" Foreground="#6B7280"/>
+                            <TextBlock Grid.Column="4" Text="위반유형" FontWeight="SemiBold" FontSize="11" Foreground="#6B7280" HorizontalAlignment="Center"/>
+                            <TextBlock Grid.Column="5" Text="처리상태" FontWeight="SemiBold" FontSize="11" Foreground="#6B7280" HorizontalAlignment="Center"/>
+                            <TextBlock Grid.Column="6" Text="액션" FontWeight="SemiBold" FontSize="11" Foreground="#6B7280" HorizontalAlignment="Center"/>
                         </Grid>
                     </Border>
 
@@ -193,30 +167,27 @@
                                             <ColumnDefinition Width="130"/>
                                             <ColumnDefinition Width="120"/>
                                             <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="2*"/>
                                             <ColumnDefinition Width="110"/>
-                                            <ColumnDefinition Width="150"/>
-                                            <ColumnDefinition Width="80"/>
                                             <ColumnDefinition Width="90"/>
-                                            <ColumnDefinition Width="80"/>
                                             <ColumnDefinition Width="130"/>
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Grid.Column="0" Text="{Binding EnforcementNoDisplay}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center"/>
                                         <TextBlock Grid.Column="1" Text="{Binding DetectedAtText}" FontSize="11" Foreground="#6B7280" VerticalAlignment="Center"/>
                                         <TextBlock Grid.Column="2" Text="{Binding Location}" FontSize="11" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                        <Border Grid.Column="3" CornerRadius="12" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                        <TextBlock Grid.Column="3" Text="{Binding BannerSummaryOneLine}" FontSize="11" Foreground="#334155"
+                                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip="{Binding OcrText}"/>
+                                        <Border Grid.Column="4" CornerRadius="12" HorizontalAlignment="Center" VerticalAlignment="Center"
                                                 Background="{Binding ViolationType, Converter={StaticResource TypeBgConverter}}">
                                             <TextBlock Text="{Binding ViolationTypeDisplay}" Style="{StaticResource PillTextStyle}"
                                                        Foreground="{Binding ViolationType, Converter={StaticResource TypeFgConverter}}"/>
                                         </Border>
-                                        <TextBlock Grid.Column="4" Text="{Binding ViolatorDisplay}" FontSize="11" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Column="5" Text="{Binding FineAmountDisplay}" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                        <Border Grid.Column="6" CornerRadius="12" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                        <Border Grid.Column="5" CornerRadius="12" HorizontalAlignment="Center" VerticalAlignment="Center"
                                                 Background="{Binding Status, Converter={StaticResource StatusBgConverter}}">
                                             <TextBlock Text="{Binding StatusDisplay}" Style="{StaticResource PillTextStyle}"
                                                        Foreground="{Binding Status, Converter={StaticResource StatusFgConverter}}"/>
                                         </Border>
-                                        <TextBlock Grid.Column="7" Text="{Binding Assignee}" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                        <StackPanel Grid.Column="8" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <StackPanel Grid.Column="6" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
                                             <Button Content="{Binding PrimaryAction}" Style="{StaticResource BlueActionButton}" Margin="0,0,4,0"
                                                     Command="{Binding DataContext.DetailCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
                                                     CommandParameter="{Binding}"/>
@@ -240,7 +211,7 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- Violator history -->
+                <!-- Similarity review -->
                 <Border Grid.Column="0" Background="White" CornerRadius="8" BorderBrush="#E5E7EB" BorderThickness="1" Padding="16">
                     <Grid>
                         <Grid.RowDefinitions>
@@ -250,26 +221,27 @@
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="위반자별 단속 이력" FontSize="14" FontWeight="Bold" Foreground="#1E293B"/>
-                            <TextBlock Text="{Binding SelectedViolatorName, StringFormat=' — {0}'}" FontSize="14" Foreground="#64748B" Margin="4,0,0,0"/>
+                            <md:PackIcon Kind="TextSearch" Foreground="#2563EB" Width="20" Height="20" VerticalAlignment="Center"/>
+                            <TextBlock Text="유사 현수막 검토" FontSize="14" FontWeight="Bold" Foreground="#1E293B" Margin="8,0,0,0"/>
                         </StackPanel>
-                        <Border Grid.Row="1" Margin="0,10,0,0" Background="#FFF7ED" BorderBrush="#FDBA74" BorderThickness="1"
+                        <Border Grid.Row="1" Margin="0,10,0,0" Background="#EFF6FF" BorderBrush="#BFDBFE" BorderThickness="1"
                                 CornerRadius="6" Padding="12,8"
-                                Visibility="{Binding HasHighRiskViolator, Converter={StaticResource BoolVis}}">
+                                Visibility="{Binding HasSimilarRecords, Converter={StaticResource BoolVis}}">
                             <StackPanel Orientation="Horizontal">
-                                <md:PackIcon Kind="AlertCircle" Foreground="#EA580C" Width="18" Height="18" VerticalAlignment="Center"/>
-                                <TextBlock Text="{Binding SelectedRiskSummary}" FontSize="12" Foreground="#9A3412"
-                                           FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                                <md:PackIcon Kind="Compare" Foreground="#2563EB" Width="18" Height="18" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding SimilaritySummary}" FontSize="12" Foreground="#1E40AF"
+                                           FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap"/>
                             </StackPanel>
                         </Border>
-                        <ListView Grid.Row="3" ItemsSource="{Binding ViolatorHistory}" BorderThickness="0" Background="Transparent">
+                        <TextBlock Grid.Row="1" Margin="0,10,0,0" Text="{Binding SimilaritySummary}" FontSize="12" Foreground="#64748B"
+                                   Visibility="{Binding HasSimilarRecords, Converter={StaticResource InvBoolVis}}"/>
+                        <ListView Grid.Row="3" ItemsSource="{Binding SimilarityRecords}" BorderThickness="0" Background="Transparent">
                             <ListView.View>
                                 <GridView>
                                     <GridViewColumn Header="일자" DisplayMemberBinding="{Binding DetectedDateText}" Width="90"/>
-                                    <GridViewColumn Header="위치" DisplayMemberBinding="{Binding Location}" Width="120"/>
-                                    <GridViewColumn Header="유형" DisplayMemberBinding="{Binding ViolationType}" Width="80"/>
-                                    <GridViewColumn Header="과태료" DisplayMemberBinding="{Binding FineAmount}" Width="70"/>
-                                    <GridViewColumn Header="상태" DisplayMemberBinding="{Binding PaymentStatus}" Width="60"/>
+                                    <GridViewColumn Header="단속위치" DisplayMemberBinding="{Binding Location}" Width="140"/>
+                                    <GridViewColumn Header="현수막 한줄요약" DisplayMemberBinding="{Binding BannerSummary}" Width="220"/>
+                                    <GridViewColumn Header="유사도" DisplayMemberBinding="{Binding SimilarityDisplay}" Width="60"/>
                                 </GridView>
                             </ListView.View>
                         </ListView>
@@ -319,10 +291,9 @@
                                             </Button>
                                         </Grid>
                                         <StackPanel Grid.Row="2">
-                                            <TextBlock Text="{Binding Location}" FontSize="14" Foreground="#334155" TextWrapping="Wrap"/>
+                                            <TextBlock Text="{Binding Location, StringFormat=단속위치: {0}}" FontSize="14" Foreground="#334155" TextWrapping="Wrap"/>
                                             <TextBlock Text="{Binding DetectedAtText, StringFormat=적발일시: {0}}" FontSize="12" Foreground="#64748B" Margin="0,8,0,0"/>
-                                            <TextBlock Text="{Binding ViolatorDisplay, StringFormat=위반자: {0}}" FontSize="12" Foreground="#64748B" Margin="0,4,0,0"/>
-                                            <TextBlock Text="{Binding FineAmountDisplay, StringFormat=과태료: {0}}" FontSize="12" Foreground="#DC2626" FontWeight="SemiBold" Margin="0,4,0,0"/>
+                                            <TextBlock Text="{Binding BannerSummaryOneLine, StringFormat=현수막 요약: {0}}" FontSize="12" Foreground="#334155" Margin="0,4,0,0" TextWrapping="Wrap"/>
                                             <TextBlock Text="{Binding StatusDisplay, StringFormat=처리상태: {0}}" FontSize="12" Foreground="#2563EB" Margin="0,4,0,0"/>
                                         </StackPanel>
                                         <Border Grid.Row="4" Background="#F1F5F9" CornerRadius="6" Padding="16">

@@ -16,8 +16,11 @@ namespace BannerGuardSystem.Controls;
 /// </summary>
 public partial class YoloBBoxOverlay : UserControl
 {
-    private static readonly SolidColorBrush BoxBrush = new(Color.FromRgb(0xFF, 0x47, 0x57));
-    private static readonly SolidColorBrush LabelBrush = new(Color.FromArgb(0xD9, 0x00, 0x00, 0x00));
+    private static readonly SolidColorBrush CctvBoxBrush = new(Color.FromRgb(0xFF, 0x47, 0x57));
+    private static readonly SolidColorBrush DetailBoxBrush = new(Color.FromRgb(0x00, 0xF5, 0xFF));
+    private static readonly SolidColorBrush DetailGlowBrush = new(Color.FromArgb(0x99, 0x00, 0xF5, 0xFF));
+    private static readonly SolidColorBrush LabelBrush = new(Color.FromArgb(0xE6, 0x00, 0x00, 0x00));
+    private static readonly SolidColorBrush DetailLabelBrush = new(Color.FromArgb(0xF2, 0x0F, 0x17, 0x2A));
 
     private BannerDetectionEventDto? _subscribedAlert;
     private INotifyCollectionChanged? _alertsCollection;
@@ -56,8 +59,11 @@ public partial class YoloBBoxOverlay : UserControl
 
     static YoloBBoxOverlay()
     {
-        BoxBrush.Freeze();
+        CctvBoxBrush.Freeze();
+        DetailBoxBrush.Freeze();
+        DetailGlowBrush.Freeze();
         LabelBrush.Freeze();
+        DetailLabelBrush.Freeze();
     }
 
     public BannerDetectionEventDto? Alert
@@ -168,7 +174,10 @@ public partial class YoloBBoxOverlay : UserControl
         if (e.PropertyName is nameof(BannerDetectionEventDto.BoundingBox)
             or nameof(BannerDetectionEventDto.FullImageBase64)
             or nameof(BannerDetectionEventDto.VlmAnalysis)
-            or nameof(BannerDetectionEventDto.OcrText))
+            or nameof(BannerDetectionEventDto.OcrText)
+            or nameof(BannerDetectionEventDto.Confidence)
+            or nameof(BannerDetectionEventDto.OcrConfidence)
+            or nameof(BannerDetectionEventDto.IsVlmTriggered))
         {
             if (!OverlayOnly && Alert != null && !string.IsNullOrEmpty(Alert.FullImageBase64))
                 FrameSource = Alert.FullImageBase64;
@@ -288,53 +297,130 @@ public partial class YoloBBoxOverlay : UserControl
 
     private FrameworkElement CreateBBox(double left, double top, double width, double height, BannerDetectionEventDto alert)
     {
+        bool isDetailPanel = !OverlayOnly;
+        double borderThickness = isDetailPanel ? 4 : 2;
+        var boxBrush = isDetailPanel ? DetailBoxBrush : CctvBoxBrush;
+        var labelBrush = isDetailPanel ? DetailLabelBrush : LabelBrush;
+        int topFontSize = isDetailPanel ? 12 : 9;
+        int bottomFontSize = isDetailPanel ? 11 : 9;
+
+        var root = new Grid { Width = width, Height = height };
+
+        if (isDetailPanel)
+        {
+            root.Children.Add(new Border
+            {
+                BorderBrush = DetailGlowBrush,
+                BorderThickness = new Thickness(8),
+                Width = width,
+                Height = height
+            });
+        }
+
         var box = new Border
         {
-            BorderBrush = BoxBrush,
-            BorderThickness = new Thickness(2),
+            BorderBrush = boxBrush,
+            BorderThickness = new Thickness(borderThickness),
             Width = width,
             Height = height
         };
+        root.Children.Add(box);
+
+        if (isDetailPanel)
+            AddCornerMarkers(root, width, height, boxBrush, borderThickness);
 
         var labels = new Grid();
         box.Child = labels;
 
         labels.Children.Add(new Border
         {
-            Background = LabelBrush,
+            Background = labelBrush,
             VerticalAlignment = VerticalAlignment.Top,
             HorizontalAlignment = HorizontalAlignment.Left,
-            Margin = new Thickness(-2, -18, 0, 0),
-            Padding = new Thickness(4, 1, 4, 1),
-            CornerRadius = new CornerRadius(1),
+            Margin = new Thickness(-borderThickness, isDetailPanel ? -52 : -18, 0, 0),
+            Padding = new Thickness(isDetailPanel ? 8 : 4, isDetailPanel ? 4 : 1, isDetailPanel ? 8 : 4, isDetailPanel ? 4 : 1),
+            CornerRadius = new CornerRadius(3),
             Child = new TextBlock
             {
-                Text = alert.YoloDetectionLabelText,
-                Foreground = Brushes.White,
-                FontSize = 9,
+                Text = isDetailPanel
+                    ? $"YOLO 탐지 {alert.YoloConfidenceText}"
+                    : alert.YoloDetectionLabelText,
+                Foreground = isDetailPanel ? boxBrush : Brushes.White,
+                FontSize = topFontSize,
                 FontWeight = FontWeights.Bold
             }
         });
+
+        if (isDetailPanel)
+        {
+            labels.Children.Add(new Border
+            {
+                Background = labelBrush,
+                VerticalAlignment = VerticalAlignment.Top,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, -borderThickness, -borderThickness, 0),
+                Padding = new Thickness(8, 4, 8, 4),
+                CornerRadius = new CornerRadius(3),
+                Child = new TextBlock
+                {
+                    Text = alert.IsVlmTriggered
+                        ? $"문자 인식률 {alert.OcrConfidenceText}"
+                        : "문자 인식률 분석 중…",
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x60, 0xA5, 0xFA)),
+                    FontSize = topFontSize,
+                    FontWeight = FontWeights.Bold
+                }
+            });
+        }
 
         labels.Children.Add(new Border
         {
-            Background = LabelBrush,
+            Background = labelBrush,
             VerticalAlignment = VerticalAlignment.Bottom,
             HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 0, 0, -18),
-            Padding = new Thickness(6, 1, 6, 1),
-            CornerRadius = new CornerRadius(1),
+            Margin = new Thickness(0, 0, 0, isDetailPanel ? -28 : -18),
+            Padding = new Thickness(isDetailPanel ? 8 : 6, isDetailPanel ? 3 : 1, isDetailPanel ? 8 : 6, isDetailPanel ? 3 : 1),
+            CornerRadius = new CornerRadius(3),
             Child = new TextBlock
             {
-                Text = $"[ID: {alert.ObjectIdText}]",
+                Text = isDetailPanel
+                    ? $"ID {alert.ObjectIdText} · {alert.StageText}"
+                    : $"[ID: {alert.ObjectIdText}]",
                 Foreground = Brushes.White,
-                FontSize = 9,
+                FontSize = bottomFontSize,
                 FontWeight = FontWeights.Bold
             }
         });
 
-        Canvas.SetLeft(box, left);
-        Canvas.SetTop(box, top);
-        return box;
+        Canvas.SetLeft(root, left);
+        Canvas.SetTop(root, top);
+        return root;
+    }
+
+    private static void AddCornerMarkers(Grid root, double width, double height, Brush brush, double thickness)
+    {
+        const double len = 14;
+        foreach (var (left, top, w, h) in new[]
+        {
+            (0.0, 0.0, len, thickness),
+            (0.0, 0.0, thickness, len),
+            (width - len, 0.0, len, thickness),
+            (width - thickness, 0.0, thickness, len),
+            (0.0, height - thickness, len, thickness),
+            (0.0, height - len, thickness, len),
+            (width - len, height - thickness, len, thickness),
+            (width - thickness, height - len, thickness, len),
+        })
+        {
+            root.Children.Add(new Border
+            {
+                Background = brush,
+                Width = w,
+                Height = h,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(left, top, 0, 0)
+            });
+        }
     }
 }
