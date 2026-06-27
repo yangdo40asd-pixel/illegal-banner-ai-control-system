@@ -26,7 +26,7 @@ class BannerDetectionEvent(BaseModel):
     CropImageUri: str
     CroppedImageBase64: Optional[str] = ""
     FullImageBase64: Optional[str] = ""
-    StatusCode: str = "ILLEGAL_COMMERCIAL"
+    StatusCode: str = "PENDING_VLM"
 
 
 class ChannelDetectionBatch(BaseModel):
@@ -61,4 +61,4 @@ class BannerAlert(BaseModel):
     Status: str = "Pending"  # Pending | Confirmed | Rejected
     ConfirmedByUser: Optional[str] = None
     ConfirmedAt: Optional[datetime] = None
-    StatusCode: str = "ILLEGAL_COMMERCIAL"
+    StatusCode: str = "PENDING_VLM"

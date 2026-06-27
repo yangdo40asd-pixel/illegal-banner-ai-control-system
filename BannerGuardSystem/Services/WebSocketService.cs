@@ -195,19 +195,29 @@ public class WebSocketService : IDisposable
 
     public async Task SendCommandAsync(string command, object value)
     {
-        if (_ws != null && _ws.State == WebSocketState.Open)
+        if (command == "human_verdict" && value != null)
         {
-            try
-            {
-                var payload = new { command = command, value = value };
-                var json = JsonConvert.SerializeObject(payload);
-                var bytes = Encoding.UTF8.GetBytes(json);
-                await _ws.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                BackendManager.Log($"[WebSocket-Err] Send command failed: {ex.Message}");
-            }
+            await SendJsonAsync(value);
+            return;
+        }
+
+        await SendJsonAsync(new { command, value });
+    }
+
+    public async Task SendJsonAsync(object payload)
+    {
+        if (_ws == null || _ws.State != WebSocketState.Open)
+            return;
+
+        try
+        {
+            var json = JsonConvert.SerializeObject(payload);
+            var bytes = Encoding.UTF8.GetBytes(json);
+            await _ws.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            BackendManager.Log($"[WebSocket-Err] Send failed: {ex.Message}");
         }
     }
 

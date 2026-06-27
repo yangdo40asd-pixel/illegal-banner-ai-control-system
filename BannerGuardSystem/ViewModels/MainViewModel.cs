@@ -2,6 +2,8 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Windows.Data;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -72,7 +74,9 @@ public class MainViewModel : BaseViewModel, IDisposable
 
 	private int _completedCount = 0;
 
-	private int _emergencyCount = 0;
+	private string _feedFilter = "All";
+
+	private readonly ICollectionView _alertFeedView;
 
 	private string _currentTimeText = string.Empty;
 
@@ -86,11 +90,48 @@ public class MainViewModel : BaseViewModel, IDisposable
 
 	private readonly Dictionary<string, DateTime> _lastIncidentTime = new Dictionary<string, DateTime>();
 
+	/// <summary>동일 소스 재분석 시 검증완료 중복 집계 방지</summary>
+	private readonly HashSet<string> _vlmCompletedKeys = new HashSet<string>();
+
 
 
 	public ObservableCollection<CctvChannel> Channels { get; } = new ObservableCollection<CctvChannel>();
 
 	public ObservableCollection<BannerDetectionEventDto> AlertFeed { get; } = new ObservableCollection<BannerDetectionEventDto>();
+
+	public ICollectionView FilteredAlertFeed => _alertFeedView;
+
+	public bool IsFilterAll
+	{
+		get => _feedFilter == "All";
+		set { if (value) FeedFilter = "All"; }
+	}
+
+	public bool IsFilterEmergency
+	{
+		get => _feedFilter == "Emergency";
+		set { if (value) FeedFilter = "Emergency"; }
+	}
+
+	public bool IsFilterNormal
+	{
+		get => _feedFilter == "Normal";
+		set { if (value) FeedFilter = "Normal"; }
+	}
+
+	public string FeedFilter
+	{
+		get => _feedFilter;
+		set
+		{
+			if (!SetField(ref _feedFilter, value, nameof(FeedFilter)))
+				return;
+			OnPropertyChanged(nameof(IsFilterAll));
+			OnPropertyChanged(nameof(IsFilterEmergency));
+			OnPropertyChanged(nameof(IsFilterNormal));
+			_alertFeedView.Refresh();
+		}
+	}
 
 	public ObservableCollection<EnforcementHistoryDto> HistoryLog { get; } = new ObservableCollection<EnforcementHistoryDto>();
 
@@ -248,7 +289,11 @@ public class MainViewModel : BaseViewModel, IDisposable
 		{
 			if (SetField(ref _isAutomationEnabled, value, "IsAutomationEnabled"))
 			{
-				_wsService?.SendCommandAsync("toggle_automation", value);
+				_ = _wsService?.SendCommandAsync("toggle_automation", value);
+				if (IsConnected)
+					AiStatusText = value
+						? "분석 실행 중..."
+						: "자동화 OFF — 분석 정지";
 			}
 		}
 	}
@@ -298,18 +343,6 @@ public class MainViewModel : BaseViewModel, IDisposable
 		set
 		{
 			SetField(ref _completedCount, value, "CompletedCount");
-		}
-	}
-
-	public int EmergencyCount
-	{
-		get
-		{
-			return _emergencyCount;
-		}
-		set
-		{
-			SetField(ref _emergencyCount, value, "EmergencyCount");
 		}
 	}
 
@@ -373,9 +406,17 @@ public class MainViewModel : BaseViewModel, IDisposable
 		}
 	}
 
-	public ICommand ApproveCommand { get; }
+	public ICommand ConfirmLegalCommand { get; }
 
-	public ICommand DismissCommand { get; }
+	public ICommand ConfirmIllegalCommand { get; }
+
+	public ICommand RequestReviewCommand { get; }
+
+	/// <summary>단축키 호환 (Space → 불법 확정)</summary>
+	public ICommand ApproveCommand => ConfirmIllegalCommand;
+
+	/// <summary>단축키 호환 (Escape → 재검토)</summary>
+	public ICommand DismissCommand => RequestReviewCommand;
 
 	public ICommand ToggleRoiModeCommand { get; }
 
@@ -394,8 +435,11 @@ public class MainViewModel : BaseViewModel, IDisposable
 		_wsService = new WebSocketService();
 		_dbService = new DatabaseService();
 		_pdfReportService = new PdfReportService();
-		ApproveCommand = new SimpleCommand(OnApproveActiveAlert);
-		DismissCommand = new SimpleCommand(OnDismissActiveAlert);
+		_alertFeedView = CollectionViewSource.GetDefaultView(AlertFeed);
+		_alertFeedView.Filter = FeedFilterPredicate;
+		ConfirmLegalCommand = new SimpleCommand(() => ApplyHumanVerdict("LEGAL"), () => ActiveAlert != null);
+		ConfirmIllegalCommand = new SimpleCommand(() => ApplyHumanVerdict("ILLEGAL"), () => ActiveAlert != null);
+		RequestReviewCommand = new SimpleCommand(() => ApplyHumanVerdict("REVIEW"), () => ActiveAlert != null);
 		ToggleRoiModeCommand = new SimpleCommand(delegate
 		{
 			IsRoiMaskMode = !IsRoiMaskMode;
@@ -439,7 +483,8 @@ public class MainViewModel : BaseViewModel, IDisposable
 				}
 				else if (text == "EnforcementList")
 				{
-					_enforcementStatusViewModel ??= new EnforcementStatusViewModel();
+					_enforcementStatusViewModel ??= new EnforcementStatusViewModel(_dbService);
+					_enforcementStatusViewModel.Refresh();
 					CurrentView = new EnforcementStatusView
 					{
 						DataContext = _enforcementStatusViewModel
@@ -448,6 +493,7 @@ public class MainViewModel : BaseViewModel, IDisposable
 				else if (text == "Statistics")
 				{
 					_statisticsReportViewModel ??= new StatisticsReportViewModel();
+					_statisticsReportViewModel.Refresh();
 					CurrentView = new StatisticsReportView
 					{
 						DataContext = _statisticsReportViewModel
@@ -498,7 +544,10 @@ public class MainViewModel : BaseViewModel, IDisposable
 				if (connected)
 				{
 					ConnectionStatus = "Connected (Live)";
-					AiStatusText = "수신 대기 중 (Listening)";
+					AiStatusText = IsAutomationEnabled
+						? "수신 대기 중 (Listening)"
+						: "자동화 OFF — 분석 정지";
+					_ = _wsService.SendCommandAsync("toggle_automation", IsAutomationEnabled);
 				}
 				else
 				{
@@ -580,18 +629,20 @@ public class MainViewModel : BaseViewModel, IDisposable
 	{
 		BaseViewModel.RunOnUi(delegate
 		{
-			AiStatusText = "AI 분석 수신 완료 (Running)";
+			// VLM 검증 완료(IsVlmTriggered) 건만 Feed·상세 패널에 반영
+			var vlmCompleted = batch.Detections.Where(d => d.IsVlmTriggered).ToList();
+			if (vlmCompleted.Count == 0)
+				return;
 
-			foreach (var alertDto in batch.Detections)
+			AiStatusText = "VLM 검증 완료";
+
+			foreach (var alertDto in vlmCompleted)
 			{
 				alertDto.SourceImage = batch.SourceImage;
 				ProcessAlertForFeed(alertDto, fromSameBatch: true, sourceImage: batch.SourceImage);
 			}
 
-			if (batch.Detections.Count > 0)
-				ActiveAlert = batch.Detections.FirstOrDefault(d => d.IsVlmTriggered)
-				              ?? batch.Detections[0];
-
+			ActiveAlert = vlmCompleted[0];
 			ResetAiStatusAfterDelay();
 		});
 	}
@@ -614,6 +665,18 @@ public class MainViewModel : BaseViewModel, IDisposable
 		});
 	}
 
+	private bool FeedFilterPredicate(object obj)
+	{
+		if (obj is not BannerDetectionEventDto alert)
+			return false;
+		return FeedFilter switch
+		{
+			"Emergency" => alert.IsEmergency,
+			"Normal" => !alert.IsEmergency,
+			_ => true
+		};
+	}
+
 	private void ProcessAlertForFeed(BannerDetectionEventDto alertDto, bool fromSameBatch = false, string sourceImage = "")
 	{
 		bool isVlmBySource = !string.IsNullOrEmpty(sourceImage);
@@ -625,27 +688,30 @@ public class MainViewModel : BaseViewModel, IDisposable
 				: a.Id == alertDto.Id
 				  || (a.CctvId == alertDto.CctvId && a.OcrText == alertDto.OcrText);
 
-		if (alertDto.IsVlmTriggered)
-		{
-			BannerDetectionEventDto bannerDetectionEventDto = AlertFeed.FirstOrDefault(SameFeedItem);
-			if (bannerDetectionEventDto == null || !bannerDetectionEventDto.IsVlmTriggered)
-			{
-				int completedCount = CompletedCount;
-				CompletedCount = completedCount + 1;
-				if (PendingCount > 0)
-				{
-					completedCount = PendingCount;
-					PendingCount = completedCount - 1;
-				}
-			}
-		}
-
 		BannerDetectionEventDto? existing = AlertFeed.FirstOrDefault(SameFeedItem);
+		bool wasVlmTriggered = existing?.IsVlmTriggered ?? false;
+		bool isPreviewRefresh = existing != null && wasVlmTriggered && !alertDto.IsVlmTriggered;
+
 		if (existing != null)
 		{
-			existing.UpdateFrom(alertDto);
-			if (isVlmBySource)
-				existing.SourceImage = sourceImage;
+			if (isPreviewRefresh)
+			{
+				// 프리뷰만 재수신: 이미지·박스만 갱신, 검증완료 상태·분석 결과 유지
+				existing.BoundingBox = alertDto.BoundingBox;
+				existing.CroppedImageBase64 = alertDto.CroppedImageBase64;
+				existing.FullImageBase64 = alertDto.FullImageBase64;
+				existing.Confidence = alertDto.Confidence;
+				existing.HasBanner = alertDto.HasBanner;
+				existing.Timestamp = alertDto.Timestamp;
+				if (isVlmBySource)
+					existing.SourceImage = sourceImage;
+			}
+			else
+			{
+				existing.UpdateFrom(alertDto);
+				if (isVlmBySource)
+					existing.SourceImage = sourceImage;
+			}
 			_lastIncidentTime[incidentKey] = DateTime.Now;
 		}
 		else
@@ -660,17 +726,31 @@ public class MainViewModel : BaseViewModel, IDisposable
 				if (AlertFeed.Count > 100)
 					AlertFeed.RemoveAt(AlertFeed.Count - 1);
 
-				int completedCount = TodayDetectionCount;
-				TodayDetectionCount = completedCount + 1;
-				if (alertDto.IsRepeatOffender)
-				{
-					completedCount = EmergencyCount;
-					EmergencyCount = completedCount + 1;
-				}
-				completedCount = PendingCount;
-				PendingCount = completedCount + 1;
+				TodayDetectionCount++;
+
+				if (!alertDto.IsVlmTriggered)
+					PendingCount++;
 			}
 		}
+
+		// 검증완료: 소스당 최초 1회만 집계 (false→true 전환)
+		if (alertDto.IsVlmTriggered && !wasVlmTriggered && !_vlmCompletedKeys.Contains(incidentKey))
+		{
+			_vlmCompletedKeys.Add(incidentKey);
+			CompletedCount++;
+			if (PendingCount > 0)
+				PendingCount--;
+
+			// 긴급 판정 → 단속처리 현황 DB 등록
+			var feedItem = AlertFeed.FirstOrDefault(SameFeedItem) ?? alertDto;
+			if (_dbService.TryInsertUrgentEnforcement(feedItem))
+			{
+				_enforcementStatusViewModel?.Refresh();
+				Debug.WriteLine($"[단속연동] 긴급 등록: {feedItem.ObjectIdText}");
+			}
+		}
+
+		_alertFeedView.Refresh();
 	}
 
 	private void ResetAiStatusAfterDelay()
@@ -732,36 +812,94 @@ public class MainViewModel : BaseViewModel, IDisposable
 		});
 	}
 
-	private void OnApproveActiveAlert()
+	private void ApplyHumanVerdict(string verdict)
 	{
-		if (ActiveAlert != null)
+		if (ActiveAlert == null)
+			return;
+
+		var alert = ActiveAlert;
+		string aiStatus = alert.StatusCode;
+		string statusCode = verdict switch
 		{
-			Debug.WriteLine("단속 승인 및 행정 보고서 생성 완료");
-			Console.WriteLine("단속 승인 및 행정 보고서 생성 완료");
-			GeneratePdfAdministrativeReport(ActiveAlert);
-			_dbService.UpdateBannerStatus(ActiveAlert.GetHashCode(), "단속확정");
-			BannerDetectionEventDto activeAlert = ActiveAlert;
-			HighlightChannelAlertState(activeAlert.CctvId, isAlerting: false);
-			AlertFeed.Remove(activeAlert);
-			SelectNextPendingAlert();
-			TriggerImmediateGC();
+			"LEGAL" => ResolveLegalStatusCode(alert),
+			"ILLEGAL" => "ILLEGAL_CONTENT",
+			_ => "MANUAL_REVIEW",
+		};
+		string label = verdict switch
+		{
+			"LEGAL" => "[관제관 확정] 합법 확인",
+			"ILLEGAL" => "[관제관 확정] 불법 확정",
+			_ => "[관제관 요청] 재검토 필요",
+		};
+		string dbStatus = verdict switch
+		{
+			"LEGAL" => "합법확정",
+			"ILLEGAL" => "불법확정",
+			_ => "재검토요청",
+		};
+		string dbVerdict = verdict switch
+		{
+			"LEGAL" => "합법",
+			"ILLEGAL" => "불법",
+			_ => "재검토",
+		};
+
+		alert.StatusCode = statusCode;
+		alert.VlmAnalysis = string.IsNullOrWhiteSpace(alert.VlmAnalysis)
+			? label
+			: $"{alert.VlmAnalysis}\n{label}";
+
+		_dbService.SaveHumanReview(
+			alert.Id,
+			alert.CctvId,
+			alert.SourceImage,
+			aiStatus,
+			verdict,
+			statusCode,
+			alert.OcrText);
+
+		_dbService.UpdateBannerStatusByCctvText(alert.CctvId, alert.OcrText, dbStatus, dbVerdict);
+		_dbService.UpdateEnforcementHumanVerdict(alert.Id, verdict, statusCode, Environment.UserName);
+		_enforcementStatusViewModel?.Refresh();
+
+		_ = _wsService.SendCommandAsync("human_verdict", new
+		{
+			command = "human_verdict",
+			alertId = alert.Id,
+			cctvId = alert.CctvId,
+			sourceImage = alert.SourceImage,
+			verdict,
+			statusCode,
+			aiStatusCode = aiStatus,
+			reviewer = Environment.UserName,
+			ocrText = alert.OcrText,
+			note = label,
+		});
+
+		if (verdict == "REVIEW")
+		{
+			_alertFeedView.Refresh();
+			Debug.WriteLine($"재검토 요청: {alert.ObjectIdText}");
+			return;
 		}
+
+		if (verdict == "ILLEGAL")
+			GeneratePdfAdministrativeReport(alert);
+
+		HighlightChannelAlertState(alert.CctvId, isAlerting: false);
+		AlertFeed.Remove(alert);
+		_alertFeedView.Refresh();
+		SelectNextPendingAlert();
+		TriggerImmediateGC();
+		Debug.WriteLine($"{label} — Feed 제거: {alert.ObjectIdText}");
 	}
 
-	private void OnDismissActiveAlert()
-	{
-		if (ActiveAlert != null)
+	private static string ResolveLegalStatusCode(BannerDetectionEventDto alert) =>
+		alert.StatusCode switch
 		{
-			Debug.WriteLine("오탐 기각 처리 완료");
-			Console.WriteLine("오탐 기각 처리 완료");
-			_dbService.UpdateBannerStatus(ActiveAlert.GetHashCode(), "오탐기각");
-			BannerDetectionEventDto activeAlert = ActiveAlert;
-			HighlightChannelAlertState(activeAlert.CctvId, isAlerting: false);
-			AlertFeed.Remove(activeAlert);
-			SelectNextPendingAlert();
-			TriggerImmediateGC();
-		}
-	}
+			"LEGAL_COMMERCIAL" or "LEGAL_POLITICS" or "LEGAL_PUBLIC" or "EXEMPT_ELECTION" => alert.StatusCode,
+			_ => "LEGAL_PUBLIC",
+		};
 
 	private void GeneratePdfAdministrativeReport(BannerDetectionEventDto alert)
 	{

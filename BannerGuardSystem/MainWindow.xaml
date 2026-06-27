@@ -118,7 +118,7 @@
                     <RadioButton Content="VLM 검증" Tag="MonitorDashboard" IsChecked="True" GroupName="SidebarMenu" Command="{Binding NavigateCommand}" CommandParameter="RealTimeMonitoring"/>
                     <RadioButton Content="단속 처리 현황" Tag="ClipboardTextOutline" GroupName="SidebarMenu" Command="{Binding NavigateCommand}" CommandParameter="EnforcementList"/>
                     <RadioButton Content="통계/리포트" Tag="ChartBar" GroupName="SidebarMenu" Command="{Binding NavigateCommand}" CommandParameter="Statistics"/>
-                    <RadioButton Content="시스템 설정" Tag="CogOutline" GroupName="SidebarMenu" Command="{Binding NavigateCommand}" CommandParameter="Settings"/>
+                    <RadioButton Content="데이터 관리" Tag="Database" GroupName="SidebarMenu" Command="{Binding NavigateCommand}" CommandParameter="Settings"/>
                 </StackPanel>
 
                 <!-- Footer Status -->
@@ -195,13 +195,7 @@
 
                     <!-- Right Top Status -->
                     <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding CurrentTimeText}" Foreground="#FFFFFF" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,20,0"/>
-                        <Grid VerticalAlignment="Center">
-                            <md:PackIcon Kind="BellOutline" Foreground="#A0AAB5" Width="20" Height="20"/>
-                            <Border Background="#EF4444" CornerRadius="8" Width="16" Height="16" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-4,-4,0">
-                                <TextBlock Text="3" Foreground="White" FontSize="10" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
-                        </Grid>
+                        <TextBlock Text="{Binding CurrentTimeText}" Foreground="#FFFFFF" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Grid>
             </Border>

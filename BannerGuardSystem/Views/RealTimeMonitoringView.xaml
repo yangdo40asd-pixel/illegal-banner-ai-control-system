@@ -29,6 +29,45 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="FilterTabEmergencyStyle" TargetType="RadioButton" BasedOn="{StaticResource FilterTabStyle}">
+            <Style.Triggers>
+                <Trigger Property="IsChecked" Value="True">
+                    <Setter Property="Foreground" Value="White"/>
+                </Trigger>
+            </Style.Triggers>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Border" Background="Transparent" CornerRadius="15" Padding="15,6" Cursor="Hand">
+                            <TextBlock x:Name="Text" Text="{TemplateBinding Content}" Foreground="#6B7280" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="#EF4444"/>
+                                <Setter TargetName="Text" Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="FilterTabNormalStyle" TargetType="RadioButton" BasedOn="{StaticResource FilterTabStyle}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Border" Background="Transparent" CornerRadius="15" Padding="15,6" Cursor="Hand">
+                            <TextBlock x:Name="Text" Text="{TemplateBinding Content}" Foreground="#6B7280" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="#22C55E"/>
+                                <Setter TargetName="Text" Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
 
     <Grid Margin="20">
@@ -62,10 +101,6 @@
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                     <TextBlock Text="처리 대기" FontSize="14" Foreground="#666666" Grid.Row="0"/>
                     <TextBlock Text="{Binding PendingCount}" FontSize="36" FontWeight="Bold" Foreground="#F97316" Grid.Row="1" VerticalAlignment="Bottom"/>
-                    <StackPanel Orientation="Horizontal" Grid.Row="1" Grid.Column="1" VerticalAlignment="Bottom">
-                        <md:PackIcon Kind="AlertOutline" Foreground="#EF4444" VerticalAlignment="Center" Width="14" Height="14"/>
-                        <TextBlock Text="{Binding EmergencyCount, StringFormat='긴급 {0}건'}" Foreground="#EF4444" FontSize="12" VerticalAlignment="Center" Margin="4,0,0,0"/>
-                    </StackPanel>
                 </Grid>
             </Border>
 
@@ -115,9 +150,12 @@
                         </StackPanel>
                         
                         <StackPanel Orientation="Horizontal" Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <RadioButton Content="전체" IsChecked="True" Style="{StaticResource FilterTabStyle}"/>
-                            <RadioButton Content="긴급" Style="{StaticResource FilterTabStyle}" Margin="10,0"/>
-                            <RadioButton Content="일반" Style="{StaticResource FilterTabStyle}"/>
+                            <RadioButton Content="전체" GroupName="FeedFilter" Style="{StaticResource FilterTabStyle}"
+                                         IsChecked="{Binding IsFilterAll, Mode=TwoWay}"/>
+                            <RadioButton Content="긴급" GroupName="FeedFilter" Style="{StaticResource FilterTabEmergencyStyle}" Margin="10,0"
+                                         IsChecked="{Binding IsFilterEmergency, Mode=TwoWay}"/>
+                            <RadioButton Content="일반" GroupName="FeedFilter" Style="{StaticResource FilterTabNormalStyle}"
+                                         IsChecked="{Binding IsFilterNormal, Mode=TwoWay}"/>
                         </StackPanel>
                         
                         <Border Grid.Column="2" Background="#F3F4F6" CornerRadius="6" Padding="10,4">
@@ -131,7 +169,7 @@
                     <Border Grid.Row="0" BorderBrush="#E5E7EB" BorderThickness="0,0,0,1" VerticalAlignment="Bottom"/>
 
                     <!-- ListBox -->
-                    <ListBox Grid.Row="1" ItemsSource="{Binding AlertFeed}" IsSynchronizedWithCurrentItem="False"
+                    <ListBox Grid.Row="1" ItemsSource="{Binding FilteredAlertFeed}" IsSynchronizedWithCurrentItem="False"
                              BorderThickness="0" Background="Transparent" Margin="10,10,10,10"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                         <ListBox.ItemContainerStyle>
@@ -178,6 +216,30 @@
                                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                                 <md:PackIcon Kind="MapMarker" Foreground="#9CA3AF" Width="14" Height="14" VerticalAlignment="Center"/>
                                                 <TextBlock Text="{Binding LocationAddress}" FontWeight="Bold" Foreground="#1F2937" FontSize="14" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                                <Border CornerRadius="8" Padding="6,1" Margin="8,0,0,0" VerticalAlignment="Center">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="Background" Value="#E5E7EB"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsEmergency}" Value="True">
+                                                                    <Setter Property="Background" Value="#FEE2E2"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <TextBlock Text="{Binding PriorityLabel}" FontSize="10" FontWeight="Bold">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Foreground" Value="#6B7280"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsEmergency}" Value="True">
+                                                                        <Setter Property="Foreground" Value="#EF4444"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                </Border>
                                                 <TextBlock Text="{Binding ObjectIdText}" Foreground="#6B7280" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center"/>
                                             </StackPanel>
                                             
@@ -206,8 +268,7 @@
                                     </Grid>
                                 </Border>
                                 <DataTemplate.Triggers>
-                                    <!-- Use IsRepeatOffender as the 'High Risk / 긴급' trigger for now -->
-                                    <DataTrigger Binding="{Binding IsRepeatOffender}" Value="True">
+                                    <DataTrigger Binding="{Binding IsEmergency}" Value="True">
                                         <Setter TargetName="ItemBorder" Property="BorderBrush" Value="#EF4444"/>
                                         <Setter TargetName="ItemBorder" Property="Background" Value="#FEF2F2"/>
                                         <Setter TargetName="ConfidenceText" Property="Foreground" Value="#EF4444"/>
@@ -290,7 +351,7 @@
                         <Border Background="#1A237E" CornerRadius="4" Padding="8,2" VerticalAlignment="Center">
                             <TextBlock Text="{Binding ActiveAlert.ObjectIdText, StringFormat='의심 ID: #{0}'}" Foreground="White" FontSize="11" FontWeight="Bold"/>
                         </Border>
-                        <Border Background="#EF4444" CornerRadius="10" Padding="8,2" VerticalAlignment="Center" Margin="10,0,0,0" Visibility="{Binding ActiveAlert.IsRepeatOffender, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <Border Background="#EF4444" CornerRadius="10" Padding="8,2" VerticalAlignment="Center" Margin="10,0,0,0" Visibility="{Binding ActiveAlert.IsEmergency, Converter={StaticResource BooleanToVisibilityConverter}}">
                             <TextBlock Text="긴급" Foreground="White" FontSize="11" FontWeight="Bold"/>
                         </Border>
                     </StackPanel>
@@ -314,7 +375,15 @@
                                                       FrameSource="{Binding ActiveAlert.FullImageBase64}"
                                                       IsActive="{Binding HasActiveAlert}"
                                                       FrameOpacity="0.92"/>
-                            <TextBlock Text="{Binding SelectedChannel.ChannelId, StringFormat='SNAPSHOT - {0}'}" Foreground="White" Background="#CC000000" Padding="6,2" VerticalAlignment="Bottom" HorizontalAlignment="Center" FontSize="10" FontWeight="Bold" Margin="0,0,0,4"/>
+                            <Border VerticalAlignment="Bottom" HorizontalAlignment="Stretch" Background="#CC000000" Padding="8,4" Margin="4">
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                    <TextBlock Text="{Binding SelectedChannel.ChannelId, StringFormat='SNAPSHOT · {0}'}" Foreground="White" FontSize="10" FontWeight="Bold" VerticalAlignment="Center"/>
+                                    <TextBlock Text=" | " Foreground="#94A3B8" Margin="6,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding ActiveAlert.YoloConfidenceText, StringFormat='탐지 {0}'}" Foreground="#F87171" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                                    <TextBlock Text=" | " Foreground="#94A3B8" Margin="6,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding ActiveAlert.OcrConfidenceText, StringFormat='문자 인식률 {0}'}" Foreground="#60A5FA" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
                             
                             <!-- Placeholder Overlay for No Alert -->
                             <Border Background="#CC121214" Visibility="{Binding HasNoActiveAlert, Converter={StaticResource BooleanToVisibilityConverter}}">
@@ -362,7 +431,7 @@
 
                     <!-- Actions -->
                     <StackPanel Grid.Column="4" VerticalAlignment="Center">
-                        <Button Background="#22C55E" Foreground="White" BorderThickness="0" Padding="0,12" Margin="0,0,0,10" Command="{Binding ApproveCommand}" IsEnabled="{Binding HasActiveAlert}">
+                        <Button Background="#22C55E" Foreground="White" BorderThickness="0" Padding="0,12" Margin="0,0,0,10" Command="{Binding ConfirmLegalCommand}" IsEnabled="{Binding HasActiveAlert}">
                             <Button.Resources>
                                 <Style TargetType="Border">
                                     <Setter Property="CornerRadius" Value="6"/>
@@ -373,7 +442,7 @@
                                 <TextBlock Text="합법 확인" FontWeight="Bold" FontSize="14" Margin="8,0,0,0" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
-                        <Button Background="#EF4444" Foreground="White" BorderThickness="0" Padding="0,12" Margin="0,0,0,10" Command="{Binding ApproveCommand}" IsEnabled="{Binding HasActiveAlert}">
+                        <Button Background="#EF4444" Foreground="White" BorderThickness="0" Padding="0,12" Margin="0,0,0,10" Command="{Binding ConfirmIllegalCommand}" IsEnabled="{Binding HasActiveAlert}">
                             <Button.Resources>
                                 <Style TargetType="Border">
                                     <Setter Property="CornerRadius" Value="6"/>
@@ -384,7 +453,7 @@
                                 <TextBlock Text="불법 확정" FontWeight="Bold" FontSize="14" Margin="8,0,0,0" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
-                        <Button Background="#9CA3AF" Foreground="White" BorderThickness="0" Padding="0,10" Margin="0,0,0,15" Command="{Binding DismissCommand}" IsEnabled="{Binding HasActiveAlert}">
+                        <Button Background="#9CA3AF" Foreground="White" BorderThickness="0" Padding="0,10" Margin="0,0,0,15" Command="{Binding RequestReviewCommand}" IsEnabled="{Binding HasActiveAlert}">
                             <Button.Resources>
                                 <Style TargetType="Border">
                                     <Setter Property="CornerRadius" Value="6"/>

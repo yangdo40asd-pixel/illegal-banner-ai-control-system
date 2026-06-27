@@ -55,6 +55,13 @@ public class StatisticsReportViewModel : BaseViewModel
         LoadReport();
     }
 
+    /// <summary>처리 완료 데이터 기준 리포트 갱신</summary>
+    public void Refresh()
+    {
+        ReloadPeriodOptions();
+        LoadReport();
+    }
+
     public ObservableCollection<string> PeriodOptions { get; }
     public ObservableCollection<CategoryRatioItem> Categories { get; }
     public ObservableCollection<DistrictViolationItem> Districts { get; }
@@ -290,25 +297,11 @@ public class StatisticsReportViewModel : BaseViewModel
             {
                 Name = "월별 건수",
                 Values = _report.MonthlyTrend.Select(m => m.DetectionCount).ToArray(),
-                Fill = new SolidColorPaint(SKColor.Parse("#3B82F6")),
-                ScalesYAt = 0
-            },
-            new LineSeries<int>
-            {
-                Name = "누적 과태료",
-                Values = _report.MonthlyTrend.Select(m => m.CumulativeFineManwon).ToArray(),
-                Stroke = new SolidColorPaint(SKColor.Parse("#DC2626"), 3),
-                Fill = null,
-                GeometrySize = 6,
-                ScalesYAt = 1
+                Fill = new SolidColorPaint(SKColor.Parse("#3B82F6"))
             }
         ];
         MonthlyXAxes = [ChartFontHelper.CreateCategoryAxis(_report.MonthlyTrend.Select(m => m.MonthLabel).ToArray())];
-        MonthlyYAxes =
-        [
-            ChartFontHelper.CreateValueAxis("건수"),
-            ChartFontHelper.CreateValueAxis("누적(만원)", position: LiveChartsCore.Measure.AxisPosition.End)
-        ];
+        MonthlyYAxes = [ChartFontHelper.CreateValueAxis("건수")];
 
         OnPropertyChanged(nameof(DistrictSeries));
         OnPropertyChanged(nameof(CategorySeries));

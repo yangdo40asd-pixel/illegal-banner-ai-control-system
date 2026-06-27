@@ -44,6 +44,21 @@ class DatabaseService:
                 status TEXT DEFAULT '감시중'
             )
         """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS human_reviews (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                alert_id TEXT NOT NULL,
+                cctv_id TEXT,
+                source_image TEXT,
+                ai_status_code TEXT,
+                human_verdict TEXT NOT NULL,
+                human_status_code TEXT NOT NULL,
+                reviewer TEXT,
+                note TEXT,
+                ocr_text TEXT,
+                reviewed_at TIMESTAMP NOT NULL
+            )
+        """)
         conn.commit()
         conn.close()
         print(f"[DB서비스] 데이터베이스 연결 및 초기화 성공: {self.db_path}")
@@ -210,6 +225,63 @@ class DatabaseService:
             rows.append(d)
         conn.close()
         return rows
+
+    def save_human_verdict(self, payload: Dict[str, Any]) -> int:
+        """관제관 수동 판정 저장 + tracked_banners 상태 갱신."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        now = datetime.now().isoformat()
+        verdict = payload.get("verdict", "")
+        status_code = payload.get("statusCode", "")
+        cctv_id = payload.get("cctvId", "")
+        alert_id = payload.get("alertId", "")
+        source_image = payload.get("sourceImage", "")
+        reviewer = payload.get("reviewer", "operator")
+        note = payload.get("note", "")
+        ocr_text = payload.get("ocrText", "")
+        ai_status = payload.get("aiStatusCode", "")
+
+        cursor.execute("""
+            INSERT INTO human_reviews
+            (alert_id, cctv_id, source_image, ai_status_code, human_verdict,
+             human_status_code, reviewer, note, ocr_text, reviewed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            alert_id, cctv_id, source_image, ai_status, verdict,
+            status_code, reviewer, note, ocr_text, now,
+        ))
+        review_id = cursor.lastrowid
+
+        status_map = {
+            "LEGAL": "합법확정",
+            "ILLEGAL": "불법확정",
+            "REVIEW": "재검토요청",
+        }
+        verdict_map = {
+            "LEGAL": "합법",
+            "ILLEGAL": "불법",
+            "REVIEW": "재검토",
+        }
+        banner_status = status_map.get(verdict, "재검토요청")
+        banner_verdict = verdict_map.get(verdict, "재검토")
+
+        if cctv_id and ocr_text:
+            cursor.execute(
+                """UPDATE tracked_banners
+                   SET status = ?, verdict = ?,
+                       reason = COALESCE(reason, '') || ?
+                   WHERE id = (
+                       SELECT id FROM tracked_banners
+                       WHERE cctv_id = ? AND text = ?
+                       ORDER BY last_seen DESC LIMIT 1
+                   )""",
+                (banner_status, banner_verdict, f"\n[관제관 {reviewer}] {verdict}", cctv_id, ocr_text),
+            )
+
+        conn.commit()
+        conn.close()
+        print(f"[DB서비스] 관제관 판정 저장: {verdict} / {status_code} (alert={alert_id})")
+        return review_id or 0
 
     def get_history_by_location(self, cctv_id: str) -> List[Dict[str, Any]]:
         """상습 검증용 CCTV ID 기반 과거 단속 기록 리스트를 반환합니다."""

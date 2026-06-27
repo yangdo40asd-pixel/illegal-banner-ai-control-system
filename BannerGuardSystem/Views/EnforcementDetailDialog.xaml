@@ -26,10 +26,9 @@
             </Grid>
 
             <StackPanel Grid.Row="2">
-                <TextBlock Text="{Binding Location}" FontSize="14" Foreground="#334155" TextWrapping="Wrap"/>
+                <TextBlock Text="{Binding Location, StringFormat=단속위치: {0}}" FontSize="14" Foreground="#334155" TextWrapping="Wrap"/>
                 <TextBlock Text="{Binding DetectedAtText, StringFormat=적발일시: {0}}" FontSize="12" Foreground="#64748B" Margin="0,8,0,0"/>
-                <TextBlock Text="{Binding ViolatorDisplay, StringFormat=위반자: {0}}" FontSize="12" Foreground="#64748B" Margin="0,4,0,0"/>
-                <TextBlock Text="{Binding FineAmountDisplay, StringFormat=과태료: {0}}" FontSize="12" Foreground="#DC2626" FontWeight="SemiBold" Margin="0,4,0,0"/>
+                <TextBlock Text="{Binding BannerSummaryOneLine, StringFormat=현수막 요약: {0}}" FontSize="12" Foreground="#334155" Margin="0,4,0,0" TextWrapping="Wrap"/>
                 <TextBlock Text="{Binding StatusDisplay, StringFormat=처리상태: {0}}" FontSize="12" Foreground="#2563EB" Margin="0,4,0,0"/>
             </StackPanel>
 

@@ -349,76 +349,84 @@ async def _run_inference_and_send(
     print(f"[시뮬레이터] [{label}{phase}] {cctv_id}{extra} → {len(deduped)}건 ({frame_w}x{frame_h})")
 
 
+def _is_automation_enabled(websocket: WebSocket) -> bool:
+    return getattr(websocket, "is_automation_enabled", True)
+
+
+def _request_pipeline_run(websocket: WebSocket) -> None:
+    run_event = getattr(websocket, "_pipeline_run_event", None)
+    if run_event is not None:
+        run_event.set()
+
+
+async def _run_detection_pipeline(websocket: WebSocket, ai_engine: AIInferenceService) -> None:
+    """CCTV + VLM 1회 실행 (반복 없음)."""
+    if not _is_automation_enabled(websocket):
+        return
+
+    is_automation = True
+
+    # ── 1) VLM 검증 우선 (WPF VLM 탭 대기 시간 단축) ──
+    vlm_sources = get_vlm_image_sources()
+    if vlm_sources:
+        print(f"[시뮬레이터] VLM 추론 ({len(vlm_sources)}장) — 완료 후에만 Feed 반영")
+        for cctv_id, image_path, source_name, frame_w, frame_h in vlm_sources:
+            if not _is_automation_enabled(websocket):
+                print("[시뮬레이터] 자동화 OFF — VLM 추론 중단")
+                return
+            try:
+                await _run_inference_and_send(
+                    websocket, ai_engine, "vlm_image_batch",
+                    cctv_id, image_path, frame_w, frame_h, is_automation,
+                    source_image=source_name,
+                )
+            except Exception as e:
+                print(f"[시뮬레이터] VLM {source_name} 오류: {e}")
+
+    # ── 2) CCTV 모니터링: MP4 ──
+    cctv_sources = get_cctv_sources()
+    if cctv_sources:
+        print(f"[시뮬레이터] CCTV 추론 ({len(cctv_sources)}채널)")
+        for cctv_id, image_path, frame_w, frame_h in cctv_sources:
+            if not _is_automation_enabled(websocket):
+                print("[시뮬레이터] 자동화 OFF — CCTV 추론 중단")
+                return
+            try:
+                await _run_inference_and_send(
+                    websocket, ai_engine, "channel_batch",
+                    cctv_id, image_path, frame_w, frame_h, is_automation,
+                )
+            except Exception as e:
+                print(f"[시뮬레이터] CCTV {cctv_id} 오류: {e}")
+
+    print("[시뮬레이터] 1회 분석 완료 — 대기 중 (자동화 ON 시 재실행)")
+
+
 async def run_real_ai_simulator(websocket: WebSocket):
-    """CCTV(MP4)와 VLM(WPF/image) 파이프라인 분리 실행."""
+    """연결 시 1회 분석. 자동화 ON 토글 시에만 다시 1회 실행 (로테이션 없음)."""
     try:
         await wait_for_ai_service()
         ai_engine = get_ai_service()
-        print("[시뮬레이터] CCTV=MP4 | VLM=WPF\\image (jpg/png/webp 자동)")
-
-        first_cycle = True
+        run_event = asyncio.Event()
+        setattr(websocket, "_pipeline_run_event", run_event)
+        print("[시뮬레이터] CCTV=MP4 | VLM=WPF\\image (1회 실행, 반복 없음)")
 
         while True:
-            try:
-                if not first_cycle:
-                    await asyncio.sleep(2.0)
-                first_cycle = False
-
-                is_automation = getattr(websocket, "is_automation_enabled", True)
-
-                # ── 1) CCTV 모니터링: MP4만 ──
-                cctv_sources = get_cctv_sources()
-                if cctv_sources:
-                    print(f"[시뮬레이터] CCTV 추론 ({len(cctv_sources)}채널)")
-                    for cctv_id, image_path, frame_w, frame_h in cctv_sources:
-                        try:
-                            await _run_inference_and_send(
-                                websocket, ai_engine, "channel_batch",
-                                cctv_id, image_path, frame_w, frame_h, is_automation,
-                            )
-                        except Exception as e:
-                            print(f"[시뮬레이터] CCTV {cctv_id} 오류: {e}")
-
-                # ── 2) VLM 검증: 1단계 YOLO 프리뷰 → 2단계 VLM 완료 갱신 ──
-                vlm_sources = get_vlm_image_sources()
-                if vlm_sources:
-                    print(f"[시뮬레이터] VLM 프리뷰 ({len(vlm_sources)}장) — Feed 즉시 채움")
-                    for cctv_id, image_path, source_name, frame_w, frame_h in vlm_sources:
-                        try:
-                            await _run_yolo_preview_and_send(
-                                websocket, ai_engine, "vlm_image_batch",
-                                cctv_id, image_path, frame_w, frame_h,
-                                source_image=source_name,
-                            )
-                        except Exception as e:
-                            print(f"[시뮬레이터] VLM 프리뷰 {source_name} 오류: {e}")
-
-                    print(f"[시뮬레이터] VLM 전체 추론 ({len(vlm_sources)}장) — 백그라운드 갱신")
-                    for cctv_id, image_path, source_name, frame_w, frame_h in vlm_sources:
-                        try:
-                            await _run_inference_and_send(
-                                websocket, ai_engine, "vlm_image_batch",
-                                cctv_id, image_path, frame_w, frame_h, is_automation,
-                                source_image=source_name,
-                            )
-                        except Exception as e:
-                            print(f"[시뮬레이터] VLM {source_name} 오류: {e}")
-
-            except asyncio.CancelledError:
-                raise
-            except Exception as e:
-                print(f"[시뮬레이터] 주기 오류 (다음 주기 재시도): {e}")
-                await asyncio.sleep(2.0)
+            await run_event.wait()
+            run_event.clear()
+            if _is_automation_enabled(websocket):
+                await _run_detection_pipeline(websocket, ai_engine)
 
     except asyncio.CancelledError:
         print("[시뮬레이터] 시뮬레이션 태스크가 취소되었습니다.")
     except Exception as e:
-        print(f"[시뮬레이터] 시뮬레이션 루프 실행 오류: {e}")
+        print(f"[시뮬레이터] 실행 오류: {e}")
 
 
 @router.websocket("/ws/alerts")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
+    setattr(websocket, "is_automation_enabled", True)
     simulator_task = asyncio.create_task(run_real_ai_simulator(websocket))
 
     try:
@@ -433,9 +441,20 @@ async def websocket_endpoint(websocket: WebSocket):
                     if msg.get("command") == "toggle_automation":
                         is_auto = msg.get("value", True)
                         setattr(websocket, "is_automation_enabled", is_auto)
-                        print(f"[WS] Automation state changed to: {is_auto}")
-                except Exception:
-                    pass
+                        state = "ON (1회 분석)" if is_auto else "OFF (분석 중단)"
+                        print(f"[WS] 자동화 {state}")
+                        if is_auto:
+                            _request_pipeline_run(websocket)
+                    elif msg.get("command") == "human_verdict":
+                        from app.services.db_service import DatabaseService
+                        db = DatabaseService()
+                        db.save_human_verdict(msg)
+                        print(
+                            f"[WS] 관제관 판정: {msg.get('verdict')} "
+                            f"→ {msg.get('statusCode')} (alert={msg.get('alertId')})"
+                        )
+                except Exception as e:
+                    print(f"[WS] 메시지 처리 오류: {e}")
     except WebSocketDisconnect:
         manager.disconnect(websocket)
     finally:

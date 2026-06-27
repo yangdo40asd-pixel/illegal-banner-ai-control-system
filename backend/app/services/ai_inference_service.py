@@ -31,8 +31,8 @@ class AIInferenceService:
     결합한 3단계 정밀 현수막 준법 심사 인공지능 추론 서비스 클래스입니다.
     """
     def __init__(self):
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        print(f"[AI엔진] 가용 가속 디바이스: {self.device}")
+        self.device = self._resolve_device()
+        self._configure_gpu()
 
         # 로컬 경로 설정
         self.base_dir = r"D:\138.종합 민원 이미지 AI데이터"
@@ -44,6 +44,8 @@ class AIInferenceService:
             self.model_path = os.path.join(self.base_dir, "yolo26s.pt")
         print(f"[AI엔진] YOLO 모델 가중치 파일 로딩: {self.model_path}")
         self.yolo = YOLO(self.model_path)
+        if self.device == "cuda":
+            self.yolo.to("cuda")
 
         # 3단계: Qwen2.5-VL-3B-Instruct VLM 로드 (GPU VRAM 포화 방지를 위해 4비트 양자화 도입)
         self.vlm_model_id = "Qwen/Qwen2.5-VL-3B-Instruct"
@@ -77,23 +79,45 @@ class AIInferenceService:
         self.ELECTION_EXEMPT = ["선거", "투표", "후보", "교육감", "기호", "공직선거법"]
         self.COMMERCIAL_ILLEGAL = ["대출", "일수", "분양", "임대", "대차", "이자", "회원모집", "피트니스", "필라테스", "오피스텔", "모델하우스", "파격조건", "투자대박"]
 
-        # ── 행정안전부·형법 기준: 내용상 불법 6유형 + 회색지대 ──
-        self.ILLEGAL_CONTENT_CATEGORIES = [
-            "명예훼손",
-            "허위사실 유포",
-            "모욕·인격침해",
-            "혐오·차별·비하 표현",
-            "음란·외설 표현",
-            "범죄 조장·불법행위 광고",
+        # ── 4대 분류: 상업 · 공익성 · 정당 · 불법 ──
+        self.CATEGORY_COMMERCIAL = "상업"
+        self.CATEGORY_PUBLIC = "공익성"
+        self.CATEGORY_PARTY = "정당"
+        self.CATEGORY_ILLEGAL = "불법"
+        self.LEGAL_FOUR_CATEGORIES = [self.CATEGORY_COMMERCIAL, self.CATEGORY_PUBLIC, self.CATEGORY_PARTY]
+        self.ILLEGAL_SUBTYPES = [
+            "사행성", "혐오", "음란", "명예훼손", "모욕", "범죄광고", "허위사실",
         ]
-        self.GRAY_ZONE_CATEGORIES = ["회색지대", "사안별 판단", "기업·정책 비판"]
-        self.LEGAL_CONTENT_CATEGORIES = [
-            "공공·행정 안내", "정치적 의견", "정부 비판", "정당 지지·반대",
-            "사회운동", "종교 홍보", "상업 광고",
+        self.ILLEGAL_CONTENT_CATEGORIES = [self.CATEGORY_ILLEGAL] + [
+            "명예훼손", "허위사실 유포", "모욕·인격침해",
+            "혐오·차별·비하 표현", "음란·외설 표현", "범죄 조장·불법행위 광고", "사행성",
         ]
-        # 1차 합법 분류인데 2차 재검토가 필요한 경우 (오분류 빈발)
-        self.VERIFY_IF_LEGAL_CATEGORIES = [
-            "사회운동", "정부 비판", "정치적 의견", "정당", "종교", "기업", "정책", "사회비판", "비판",
+        self.LEGAL_CONTENT_CATEGORIES = self.LEGAL_FOUR_CATEGORIES
+        self.KW_PUBLIC_INTEREST = [
+            "이웃", "배려", "생각해", "마음", "캠페인", "금연", "안전", "환경", "쓰레기",
+            "무단투기", "단속", "안내", "주민", "예방", "조용", "애완", "주차", "교통",
+            "보행", "공익", "구청", "시청", "보건", "경찰", "주민센터", "생활", "마을",
+            "우리동네", "종교", "교회", "사찰", "봉사", "기부", "보호", "예방", "환경보호",
+            "동물", "분리수거", "재활용", "화재", "방범",
+        ]
+        self.KW_PARTY = [
+            "국회의원", "후보", "정당", "당원", "더불어민주당", "국민의힘", "민주당",
+            "탄핵", "선거", "투표", "공직선거", "지역위원장", "법안발의", "의원",
+            "대통령", "국회", "여당", "야당", "정책공약", "공약", "지지합니다", "반대합니다",
+        ]
+        self.KW_REAL_ESTATE = [
+            "부동산", "분양", "임대", "매매", "전세", "월세", "오피스텔", "아파트", "빌라",
+            "상가", "토지", "모델하우스", "입주", "청약", "부동산중개", "공인중개", "리모델링",
+            "타운하우스", "주상복합", "양도", "전매", "분양문의", "임대문의", "부동산컨설팅",
+        ]
+        self.KW_COMMERCIAL = [
+            "할인", "개업", "오픈", "학원", "세일", "이벤트", "전화", "문의", "예약",
+            "회원모집", "피트니스", "필라테스", "오픈기념", "대차", "이자",
+        ] + self.KW_REAL_ESTATE
+        self.KW_EXPLICIT_ILLEGAL_LOAN = [
+            "사채", "불법대출", "일수", "당일대출", "무서류대출", "무서류", "신불자",
+            "대포통장", "급전", "당일입금", "당일승인", "리딩방", "보이스피싱", "불법환전",
+            "작업계좌", "대포폰", "카드깡",
         ]
         self.KW_DEFAMATION = ["사기꾼", "범죄자", "횡령범", "불륜", "외도", "바람", "간통", "폭로", "스캔들", "바람피웠", "불륜자"]
         self.KW_FALSE_FACT = ["날조", "조작", "허위", "거짓말", "가짜뉴스"]
@@ -101,9 +125,9 @@ class AIInferenceService:
         self.KW_HATE = ["인종", "장애인", "존엄성", "짐승", "하등인간"]
         self.KW_OBSCENE = ["성매매", "성행위", "음란", "야한", "19금", "원조", "조건만남", "성적", "노골적"]
         self.KW_CRIME_AD = [
-            "마약", "도박", "홀덤", "바카라", "토토", "보이스피싱", "일수", "사채", "대포통장", "불법대출",
+            "마약", "도박", "홀덤", "바카라", "토토", "보이스피싱",
             "인신매매", "성착취", "필로폰", "아이스", "대마초",
-        ]
+        ] + self.KW_EXPLICIT_ILLEGAL_LOAN
         self.KW_GRAY_ZONE = ["불매", "무능", "망친다", "추방", "반이민", "페미니즘 반대"]
 
         # ── 은유·은어·우회 표현 (직설 키워드 없을 때 VLM+패턴으로 해독) ──
@@ -160,9 +184,7 @@ class AIInferenceService:
         ]
         # (정규식, 불법유형 또는 None=재검토 트리거만)
         self.EUPHEMISM_REGEX: List[Tuple[str, str | None, str]] = [
-            (r"0\d{1,2}[-.\s]?\d{3,4}[-.\s]?\d{4}", "범죄 조장·불법행위 광고", "지역번호+연락처 광고"),
-            (r"010[-.\s]?\d{4}[-.\s]?\d{4}", "범죄 조장·불법행위 광고", "휴대폰 연락처 광고"),
-            (r"010\s*\d{4}\s*\d{4}", "범죄 조장·불법행위 광고", "휴대폰 연락처 광고"),
+            # 연락처 단독은 불법 아님 (부동산·상업 광고) — 사채/당일대출 복합 패턴만 불법
             (r"[ㄱ-ㅎ]{2,}", None, "초성 은어"),
             (r"\d+\s*만\s*원.*당일", "범죄 조장·불법행위 광고", "당일대출 은유 광고"),
             (r"당일.*\d+\s*만", "범죄 조장·불법행위 광고", "당일대출 은유 광고"),
@@ -183,12 +205,67 @@ class AIInferenceService:
         self.temp_zoom = os.path.join(self.script_dir, "_temp_zoom.jpg")
         self._inference_lock = threading.Lock()
 
-        # VLM 속도 튜닝 (해상도·토큰·이미지 수)
-        self.VLM_MAX_DIM = 384
-        self.VLM_MAX_TOKENS_PASS1 = 256
-        self.VLM_MAX_TOKENS_PASS2 = 160
+        # VLM 해상도 — 512px는 글자 인식률 급락, zoom 1024 기준 복원
+        self.VLM_ZOOM_WIDTH = 1024
+        self.VLM_CONTEXT_MAX_DIM = 768
+        self.VLM_MAX_TOKENS_PASS1 = 512
+        self.VLM_MAX_TOKENS_PASS2 = 384
+        self.VLM_MAX_TOKENS_PASS3 = 320
 
-        print("[AI엔진] 모든 AI 추론 파이프라인 (YOLO + EasyOCR + Qwen2.5-VL) 초기화 완료.")
+        print("[AI엔진] 모든 AI 추론 파이프라인 (YOLO + VLM) 초기화 완료.")
+
+    # VLM 출력 형식 — 파서(_extract_markdown_vlm_text)와 1:1 매칭
+    VLM_MARKDOWN_OUTPUT_GUIDE = (
+        "【출력 형식 — 아래 마크다운 bullet만 사용, 다른 형식 금지】\n"
+        "- **이미지 관찰**: 설치 위치·배경 한 줄\n"
+        "- **글자·내용 독해**: 현수막 글자를 읽은 순서대로 원문 그대로 (요약·의역·생략 금지)\n"
+        "- **의미 분석**: 의도 한 줄\n"
+        "- **텍스트**: 글자·내용 독해와 동일한 원문 한 줄\n"
+        "- **실질의미**: 없으면 해당없음\n"
+        "- **법적판정**: 합법 또는 불법\n"
+        "- **추천분류**: 상업 또는 공익성 또는 정당 또는 불법\n"
+        "- **불법세부**: 불법일 때만 사행성/혐오/음란/명예훼손/모욕/범죄광고, 아니면 없음\n"
+        "- **신뢰도**: 높음 또는 보통 또는 낮음\n"
+        "- **판단이유**: 한 줄\n"
+    )
+
+    def _resolve_device(self) -> str:
+        if torch.cuda.is_available():
+            return "cuda"
+        print("[AI엔진] CUDA 미사용 — CPU 모드 (VLM 매우 느림)")
+        return "cpu"
+
+    def _configure_gpu(self) -> None:
+        if self.device != "cuda":
+            return
+        try:
+            torch.backends.cudnn.benchmark = True
+            torch.backends.cuda.matmul.allow_tf32 = True
+            if hasattr(torch, "set_float32_matmul_precision"):
+                torch.set_float32_matmul_precision("high")
+            props = torch.cuda.get_device_properties(0)
+            print(
+                f"[AI엔진] GPU 가속: {props.name} "
+                f"({props.total_memory / 1024 ** 3:.1f} GB VRAM)"
+            )
+        except Exception as e:
+            print(f"[AI엔진] GPU 설정 경고: {e}")
+
+    def _get_vlm_device(self):
+        try:
+            return next(self.vlm.parameters()).device
+        except StopIteration:
+            return torch.device(self.device)
+
+    @staticmethod
+    def _safe_yolo_conf(boxes, index: int) -> float:
+        try:
+            val = boxes.conf[index]
+            if hasattr(val, "item"):
+                val = val.item()
+            return float(val)
+        except (TypeError, ValueError):
+            return 0.0
 
     # ─── NLP 문자열 유사도 연산 (Levenshtein) ───
     def levenshtein_similarity(self, s1: str, s2: str) -> float:
@@ -224,7 +301,7 @@ class AIInferenceService:
 
     # ─── VLM 멀티 에이전트 분석 로직 ───
     def _vlm_resize(self, img: Image.Image, max_dim: Optional[int] = None) -> Image.Image:
-        max_dim = max_dim or self.VLM_MAX_DIM
+        max_dim = max_dim or self.VLM_CONTEXT_MAX_DIM
         w, h = img.size
         if w <= max_dim and h <= max_dim:
             return img
@@ -232,16 +309,33 @@ class AIInferenceService:
             return img.resize((max_dim, int(max_dim * h / w)), Image.LANCZOS)
         return img.resize((int(max_dim * w / h), max_dim), Image.LANCZOS)
 
+    def _vlm_resize_zoom(self, img: Image.Image) -> Image.Image:
+        """확대 크롭 — 가로 1024 기준 (이전 동작 복원)."""
+        w, h = img.size
+        if w <= 0 or h <= 0:
+            return img
+        target_w = self.VLM_ZOOM_WIDTH
+        target_h = max(1, int(target_w * h / w))
+        return img.resize((target_w, target_h), Image.LANCZOS)
+
     def _vlm_run_generate(self, messages: list, max_new_tokens: int) -> str:
         text = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         image_inputs, _ = process_vision_info(messages)
-        inputs = self.processor(text=[text], images=image_inputs, padding=True, return_tensors="pt").to(self.device)
-        with torch.no_grad():
-            gen_ids = self.vlm.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=False)
-            return self.processor.batch_decode(
-                gen_ids[:, inputs.input_ids.shape[1]:],
-                skip_special_tokens=True,
-            )[0]
+        vlm_device = self._get_vlm_device()
+        inputs = self.processor(
+            text=[text], images=image_inputs, padding=True, return_tensors="pt"
+        )
+        inputs = {k: v.to(vlm_device) if hasattr(v, "to") else v for k, v in inputs.items()}
+        with torch.inference_mode():
+            if vlm_device.type == "cuda":
+                with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+                    gen_ids = self.vlm.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=False)
+            else:
+                gen_ids = self.vlm.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=False)
+        return self.processor.batch_decode(
+            gen_ids[:, inputs["input_ids"].shape[1]:],
+            skip_special_tokens=True,
+        )[0]
 
     def _vlm_cleanup_temp(self):
         for path in [self.temp_context, self.temp_zoom]:
@@ -258,31 +352,42 @@ class AIInferenceService:
             min(img_w, x2 + pad), min(img_h, y2 + pad)
         ))
 
-    def run_vlm_analysis(self, context_image: Image.Image, zoom_image: Image.Image, aspect_ratio: float) -> str:
-        """1차 VLM — 확대 컷 단일 이미지·짧은 구조화 출력 (속도 우선)."""
-        zoom_image = self._vlm_resize(zoom_image)
+    def _vlm_build_image_messages(self, context_image: Image.Image, zoom_image: Image.Image, prompt: str) -> list:
+        context_image = self._vlm_resize(context_image, self.VLM_CONTEXT_MAX_DIM)
+        zoom_image = self._vlm_resize_zoom(zoom_image)
+        context_image.save(self.temp_context)
         zoom_image.save(self.temp_zoom)
-
-        messages = [{
+        return [{
             "role": "user",
             "content": [
+                {"type": "image", "image": self.temp_context},
                 {"type": "image", "image": self.temp_zoom},
-                {"type": "text", "text": (
-                    "현수막 확대 이미지의 글자·내용만 분석. 설치허가·위치는 제외.\n"
-                    "은유·은어(마약·성매매·사채·인신매매·폭로 위장)가 있으면 실질의미에 해독.\n"
-                    "아래 형식만 출력. 각 요약은 1문장, 40자 이내.\n\n"
-                    "텍스트: (이미지에서 읽은 글자를 원문 그대로. 여러 줄이면 | 로 구분)\n"
-                    "실질의미: (없으면 해당없음)\n"
-                    "법적판정: 합법 또는 불법 또는 회색지대\n"
-                    "추천분류: (불법6유형·합법·회색지대 중 하나)\n"
-                    "신뢰도: 높음 또는 보통 또는 낮음\n"
-                    "요약1: (인식한 내용)\n"
-                    "요약2: (법적 성격·분류)\n"
-                    "요약3: (판단 핵심)\n"
-                )}
-            ]
+                {"type": "text", "text": prompt},
+            ],
         }]
 
+    def run_vlm_analysis(self, context_image: Image.Image, zoom_image: Image.Image, aspect_ratio: float) -> str:
+        """1차 VLM — 4대 분류 (상업·공익성·정당·불법)."""
+        prompt = (
+            "첫 번째 이미지는 현수막 주변 맥락, 두 번째는 현수막 확대입니다.\n"
+            "오직 현수막 글 내용만 보고 분류하십시오. 설치 허가·위치는 판단하지 마십시오.\n\n"
+            "【4대 분류 — 추천분류는 반드시 아래 4개 중 정확히 하나】\n\n"
+            "1. 상업 — 개업·할인·학원·제품·서비스·**부동산(분양·임대·매매·오피스텔·아파트)** 홍보\n"
+            "   ※ 부동산·분양 광고에 전화번호·대출 안내가 있어도 **상업(합법)** — 사채·일수·당일대출만 불법\n"
+            "2. 공익성 — 주민 캠페인, 이웃 배려, 금연·환경·안전·교통·생활 안내, "
+            "종교·봉사·마을 행사 (예: '이웃을 생각해주세요', '쓰레기 무단투기 금지')\n"
+            "3. 정당 — 정당·후보·선거·탄핵·국회의원·정책 공약 등 정치·정당 활동만\n"
+            "   ※ '이웃 배려', '생활 캠페인'은 정당이 아니라 공익성\n"
+            "   ※ 정부 비판만 있고 정당·선거 맥락이 없으면 공익성 또는 정당 중 "
+            "정당 고유 표현(후보·정당명·선거)이 있을 때만 정당\n\n"
+            "4. 불법 — 내용 자체가 불법 가능성 매우 높음\n"
+            "   · 사행성: 도박·불법대출·사채·마약 광고\n"
+            "   · 혐오: 인종·민족·장애인·성별 비하·추방 요구\n"
+            "   · 음란: 성매매·노골적 성적 표현\n"
+            "   · 명예훼손·모욕·범죄 조장 광고\n\n"
+            f"{self.VLM_MARKDOWN_OUTPUT_GUIDE}"
+        )
+        messages = self._vlm_build_image_messages(context_image, zoom_image, prompt)
         output = self._vlm_run_generate(messages, self.VLM_MAX_TOKENS_PASS1)
         self._vlm_cleanup_temp()
         return output
@@ -291,31 +396,16 @@ class AIInferenceService:
         self, context_image: Image.Image, zoom_image: Image.Image,
         first_analysis: str, parsed_text: str
     ) -> str:
-        """2차 VLM — 확대 컷만·짧은 재검토 출력."""
-        zoom_image = self._vlm_resize(zoom_image)
-        zoom_image.save(self.temp_zoom)
-
-        messages = [{
-            "role": "user",
-            "content": [
-                {"type": "image", "image": self.temp_zoom},
-                {"type": "text", "text": (
-                    f"1차결과: {first_analysis[:500]}\n"
-                    f"인식텍스트: {parsed_text}\n\n"
-                    "이미지를 다시 보고 1차 판정을 재검토. 은어·은유·폭로위장 놓쳤는지 확인.\n"
-                    "아래 형식만 출력. 각 요약 1문장 40자 이내.\n\n"
-                    "텍스트: (원문 그대로, 여러 줄이면 | 로 구분)\n"
-                    "실질의미: (수정 시, 없으면 해당없음)\n"
-                    "법적판정: 합법 또는 불법 또는 회색지대\n"
-                    "추천분류: (유형명)\n"
-                    "신뢰도: 높음 또는 보통 또는 낮음\n"
-                    "요약1: (인식 내용)\n"
-                    "요약2: (법적 성격)\n"
-                    "요약3: (판단 핵심)\n"
-                )}
-            ]
-        }]
-
+        """2차 VLM — 1차 결과 심층 재검토 (조건부)."""
+        prompt = (
+            f"[1차 AI 분석]\n{first_analysis[:1400]}\n\n"
+            f"인식 텍스트: {parsed_text}\n\n"
+            "위 1차 추론을 비판적으로 재검토하십시오. 이미지를 다시 보고 틀린 부분을 수정하십시오.\n"
+            "은어·폭로위장·마약·인신매매 미끼·불법광고를 놓쳤는지 확인하십시오.\n\n"
+            "- **재검토 의견**: 1차 동의/반박, 새로 읽은 글자\n"
+            f"{self.VLM_MARKDOWN_OUTPUT_GUIDE}"
+        )
+        messages = self._vlm_build_image_messages(context_image, zoom_image, prompt)
         output = self._vlm_run_generate(messages, self.VLM_MAX_TOKENS_PASS2)
         self._vlm_cleanup_temp()
         return output
@@ -324,66 +414,18 @@ class AIInferenceService:
         self, context_image: Image.Image, zoom_image: Image.Image,
         surface_text: str, first_category: str
     ) -> str:
-        """3차 전용: 은유·은어·초성·업종은어로 숨긴 불법 의미 해독."""
-        def resize_to_max(img, max_dim=512):
-            w, h = img.size
-            if w <= max_dim and h <= max_dim:
-                return img
-            if w > h:
-                return img.resize((max_dim, int(max_dim * h / w)), Image.LANCZOS)
-            return img.resize((int(max_dim * w / h), max_dim), Image.LANCZOS)
-
-        context_image = resize_to_max(context_image, 512)
-        zoom_image = resize_to_max(zoom_image, 512)
-        context_image.save(self.temp_context)
-        zoom_image.save(self.temp_zoom)
-
-        messages = [{
-            "role": "user",
-            "content": [
-                {"type": "image", "image": self.temp_context},
-                {"type": "image", "image": self.temp_zoom},
-                {"type": "text", "text": (
-                    f"표면 문구: {surface_text}\n"
-                    f"1차 분류: {first_category}\n\n"
-                    "당신은 현수막 '은유·은어 해독' 전문가입니다. 표면 문구와 다르게 숨긴 실질 의미를 찾으십시오.\n"
-                    "직접 불법 단어가 없어도, 업계 은어·초성·비유·암시로 불법을 유도하면 불법입니다.\n\n"
-                    "【해독 예시】\n"
-                    "- '급전 당일 010-XXXX' → 불법 사채/대포통장 광고\n"
-                    "- '출장 안마 스웨디시' / '010+스웨디시' → 성매매 알선\n"
-                    "- '고액알바 주급300' / '해외고소득 여성모집' → 인신매매·성착취 알선 미끼\n"
-                    "- '얼음 작업' / '아이스·빙두·작대기' / '캔디·몰리' / '허브·브액' → 마약 거래 은어\n"
-                    "- '시원한 술 구함' → 필로폰(메스암페타민) 은어\n"
-                    "- 'OO의 비밀을 폭로' / '두 번째 사랑' → 특정인 명예훼손(불륜 폭로)\n"
-                    "- 'ㅅㅂ XX놈' / 'XX충 나가라' → 모욕 또는 혐오\n"
-                    "- '사회정의를 위해 진실을 밝힌다'(실제는 불륜 폭로) → 명예훼손\n"
-                    "- '카톡/텔레 비밀방 입장' + 연락처만 → 불법 거래·알선 채널\n\n"
-                    "6대 불법: 명예훼손, 허위사실 유포, 모욕·인격침해, 혐오·차별·비하, 음란·외설, 범죄조장·불법행위광고\n"
-                    "애매하면 회색지대 (사안별 판단).\n\n"
-                    "출력 형식:\n"
-                    "은유탐지: 있음 또는 없음\n"
-                    "실질의미: 숨겨진 의미를 직설적으로\n"
-                    "해독결과: 합법 또는 불법 또는 회색지대\n"
-                    "최종분류: 카테고리명 하나\n"
-                    "해독근거: 한 문장\n"
-                )}
-            ]
-        }]
-
-        text = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-        image_inputs, _ = process_vision_info(messages)
-        inputs = self.processor(text=[text], images=image_inputs, padding=True, return_tensors="pt").to(self.device)
-
-        with torch.no_grad():
-            gen_ids = self.vlm.generate(**inputs, max_new_tokens=350, do_sample=False)
-            output = self.processor.batch_decode(
-                gen_ids[:, inputs.input_ids.shape[1]:],
-                skip_special_tokens=True
-            )[0]
-
-        for path in [self.temp_context, self.temp_zoom]:
-            if os.path.exists(path):
-                os.remove(path)
+        """2차 VLM — 은유·은어 전용 해독 (조건부)."""
+        prompt = (
+            f"표면 문구: {surface_text}\n"
+            f"1차 분류: {first_category}\n\n"
+            "현수막 은유·은어 해독 전문가로서 숨긴 불법 의미를 찾으십시오.\n"
+            "예: 급전+010=사채, 출장안마=성매매, 고액알바=인신매매, 얼음·아이스=마약, 폭로·비밀=명예훼손\n\n"
+            "- **은유탐지**: 있음 또는 없음\n"
+            f"{self.VLM_MARKDOWN_OUTPUT_GUIDE}"
+        )
+        messages = self._vlm_build_image_messages(context_image, zoom_image, prompt)
+        output = self._vlm_run_generate(messages, self.VLM_MAX_TOKENS_PASS3)
+        self._vlm_cleanup_temp()
         return output
 
     def _match_euphemism_regex(self, text: str) -> Tuple[str | None, List[str]]:
@@ -426,14 +468,84 @@ class AIInferenceService:
         """약한 신호 포함 광범위 탐지 — 2차 트리거에는 should_trigger_euphemism_review 사용."""
         return len(self.detect_euphemism_signals(text)) > 0
 
-    def _extract_vlm_conclusion_section(self, raw_clean: str) -> str:
+    def _extract_vlm_conclusion_section(self, raw: str) -> str:
         """VLM 출력 결론 블록만 추출 (분석 본문·프롬프트 잔여 오탐 방지)."""
-        m = re.search(r"===\s*결론\s*===([\s\S]*)", raw_clean)
-        if m:
-            return m.group(1).strip()
-        m2 = re.search(r"법적판정\s*[:：]", raw_clean)
+        for pattern in (
+            r"===\s*결론\s*===([\s\S]*)",
+            r"##\s*결론\s*([\s\S]*)",
+            r"【\s*결론\s*】([\s\S]*)",
+        ):
+            m = re.search(pattern, raw)
+            if m:
+                return m.group(1).strip()
+        m2 = re.search(r"법적판정\s*[:：]", raw)
         if m2:
-            return raw_clean[m2.start():].strip()
+            return raw[m2.start():].strip()
+        m3 = re.search(r"텍스트\s*[:：]\s*.+\n\s*실질의미\s*[:：]", raw, re.DOTALL)
+        if m3:
+            return raw[m3.start():].strip()
+        return ""
+
+    def _extract_reading_section(self, raw: str) -> str:
+        """VLM '글자·내용 독해' 블록 추출."""
+        m = re.search(
+            r"===\s*글자[^=\n]*독해\s*===([\s\S]*?)(?====|\Z)",
+            raw,
+        )
+        return m.group(1).strip() if m else ""
+
+    def _parse_text_field(self, scope: str) -> str:
+        """구조화 필드 '텍스트:' 한 줄·여러 줄 파싱."""
+        if not scope:
+            return ""
+        m = re.search(
+            r"텍스트\s*[:：]\s*(.+?)(?=\n\s*(?:실질의미|법적판정|추천분류|불법세부|신뢰도|판단이유|요약\s*1|요약1)\s*[:：]|\Z)",
+            scope,
+            re.DOTALL | re.MULTILINE,
+        )
+        if m:
+            if cleaned := self._sanitize_banner_text(m.group(1)):
+                return cleaned
+        m_line = re.search(r"텍스트\s*[:：]\s*([^\n]+)", scope)
+        if m_line:
+            if cleaned := self._sanitize_banner_text(m_line.group(1)):
+                return cleaned
+        return ""
+
+    def _fallback_banner_text_scan(self, raw: str) -> str:
+        """결론 필드 실패 시 백업 — 인용부호·독해 본문·첫 유효 줄."""
+        for pattern in (
+            r"적힌\s*(?:모든\s*)?내용\s*[:：]\s*([^\n]+)",
+            r"내용\s*[:：]\s*([^\n]+)",
+            r"문구\s*[:：]\s*([^\n]+)",
+        ):
+            m = re.search(pattern, raw, re.MULTILINE)
+            if m:
+                found = m.group(1).strip().strip("\"'()")
+                if found and not self.is_placeholder(found):
+                    return found[:300]
+        for pattern in (r'[\'"\u201c\u2018](.*?)[\'"\u201d\u2019]', r"\*\*(.*?)\*\*"):
+            m = re.search(pattern, raw)
+            if m:
+                found = m.group(1).strip()
+                if found and not self.is_placeholder(found):
+                    return found[:300]
+        skip = (
+            "설치", "판정", "분류", "신뢰도", "이미지", "현수막", "분석", "결론",
+            "독해", "관찰", "의미", "법적", "추천", "불법세부", "실질", "해당없음",
+        )
+        reading = self._extract_reading_section(raw)
+        for block in (reading, raw):
+            if not block:
+                continue
+            for line in block.split("\n"):
+                line = line.strip().strip("()[]{} ")
+                if len(line) < 2 or line.startswith("==="):
+                    continue
+                if any(k in line for k in skip):
+                    continue
+                if not self.is_placeholder(line):
+                    return line[:300]
         return ""
 
     def should_trigger_euphemism_review(self, banner_text: str, vlm_raw_clean: str) -> bool:
@@ -501,7 +613,7 @@ class AIInferenceService:
 
     def infer_category_from_euphemisms(self, text: str) -> str | None:
         """은어·은유 패턴으로 6대 불법 유형 추정 (직설 키워드 없을 때)."""
-        if not text:
+        if not text or self._commercial_shield(text):
             return None
         regex_cat, _ = self._match_euphemism_regex(text)
         if regex_cat:
@@ -521,10 +633,9 @@ class AIInferenceService:
         if any(k in text for k in self.KW_EUPHEMISM_HATE):
             return "혐오·차별·비하 표현"
         if any(k in text for k in self.KW_EUPHEMISM_DEFAMATION):
-            # 폭로+특정인 암시 또는 인명 패턴
             if re.search(r"[가-힣]{2,4}\s*(시장|구청장|의원|대표|교수|목사|장로|씨)", text):
                 return "명예훼손"
-            if any(t in text for t in ["폭로", "비밀", "진실", "스캔들", "밀회", "두번째", "바람"]):
+            if any(t in text for t in ("폭로한다", "폭로합니다", "스캔들", "밀회", "불륜설", "바람피")):
                 return "명예훼손"
         return None
 
@@ -545,47 +656,83 @@ class AIInferenceService:
         return self.should_trigger_euphemism_review(parsed_text, raw_clean)
 
     def _normalize_category(self, category: str) -> str:
-        """VLM 출력 카테고리를 표준 명칭으로 정규화."""
+        """VLM 출력 → 4대 분류(상업·공익성·정당·불법)로 정규화."""
         c = category.strip()
-        mapping = [
-            ("명예훼손", "명예훼손"),
-            ("허위사실", "허위사실 유포"),
-            ("모욕", "모욕·인격침해"),
-            ("인격침해", "모욕·인격침해"),
-            ("혐오", "혐오·차별·비하 표현"),
-            ("차별", "혐오·차별·비하 표현"),
-            ("음란", "음란·외설 표현"),
-            ("외설", "음란·외설 표현"),
-            ("범죄 조장", "범죄 조장·불법행위 광고"),
-            ("불법행위", "범죄 조장·불법행위 광고"),
-            ("회색지대", "회색지대 (사안별 판단)"),
-            ("사안별", "회색지대 (사안별 판단)"),
-            ("기업·정책", "회색지대 (사안별 판단)"),
-            ("공공·행정", "공공·행정 안내"),
-            ("정치적", "정치적 의견"),
-            ("정부 비판", "정부 비판"),
-            ("정당", "정당 지지·반대"),
-            ("사회운동", "사회운동"),
-            ("사회비판", "사회운동"),
-            ("종교", "종교 홍보"),
-            ("상업", "상업 광고"),
-        ]
-        for key, std in mapping:
-            if key in c:
-                return std
+        if not c:
+            return ""
+        if "불법" in c or any(k in c for k in ("혐오", "음란", "사행", "명예훼손", "모욕", "범죄", "도박", "마약")):
+            return self.CATEGORY_ILLEGAL
+        if "상업" in c or ("광고" in c and "불법" not in c):
+            return self.CATEGORY_COMMERCIAL
+        if any(k in c for k in ("부동산", "분양", "임대", "매매", "오피스텔", "아파트", "전세", "월세")):
+            return self.CATEGORY_COMMERCIAL
+        if any(k in c for k in ("정당", "선거", "후보", "탄핵", "국회", "정치")):
+            return self.CATEGORY_PARTY
+        if any(k in c for k in ("공익", "캠페인", "안내", "주민", "이웃", "환경", "안전", "종교", "사회")):
+            return self.CATEGORY_PUBLIC
+        if any(k in c for k in ("정부", "비판", "운동")):
+            return self.CATEGORY_PUBLIC
         return c
 
     def _is_illegal_category(self, category: str) -> bool:
         norm = self._normalize_category(category)
-        return any(ic in norm or norm in ic for ic in self.ILLEGAL_CONTENT_CATEGORIES)
+        return norm == self.CATEGORY_ILLEGAL or any(
+            ic in norm for ic in (
+                "명예훼손", "허위사실", "모욕", "혐오", "음란", "범죄", "사행",
+            )
+        )
 
-    def _is_gray_category(self, category: str) -> bool:
-        norm = self._normalize_category(category)
-        return any(g in norm for g in self.GRAY_ZONE_CATEGORIES) or "수동" in norm or "알 수 없음" in norm
+    def _is_party_text(self, text: str) -> bool:
+        return any(k in text for k in self.KW_PARTY)
+
+    def _is_commercial_text(self, text: str) -> bool:
+        return any(k in text for k in self.KW_COMMERCIAL)
+
+    def _is_explicit_illegal_commercial(self, text: str) -> bool:
+        """사채·불법대출·일수 등 진짜 불법 상업만."""
+        if not text:
+            return False
+        if any(k in text for k in self.KW_EXPLICIT_ILLEGAL_LOAN):
+            return True
+        if re.search(r"당일.*\d+\s*만", text) or re.search(r"\d+\s*만\s*원.*당일", text):
+            return True
+        return False
+
+    def _commercial_shield(self, text: str) -> bool:
+        """부동산·일반 상업 광고 — 불법대출 신호 없으면 불법 키워드/연락처 오탐 차단."""
+        return self._is_commercial_text(text) and not self._is_explicit_illegal_commercial(text)
+
+    def _is_public_text(self, text: str) -> bool:
+        return any(k in text for k in self.KW_PUBLIC_INTEREST)
+
+    def extract_illegal_subtype(self, res: str) -> str:
+        conclusion = self._extract_vlm_conclusion_section(res) or res
+        m = re.search(r"불법\s*세부\s*[:：]\s*([^\n]+)", conclusion)
+        if m:
+            return m.group(1).strip()[:20]
+        if any(k in conclusion for k in ("혐오", "차별", "비하")):
+            return "혐오"
+        if any(k in conclusion for k in ("음란", "외설", "성매매")):
+            return "음란"
+        if any(k in conclusion for k in ("도박", "사채", "마약", "사행")):
+            return "사행성"
+        return "내용위반"
+
+    def _infer_four_category(self, text: str) -> str:
+        """키워드 보조 — 기본값 공익성 ('이웃을 생각해주세요' 등)."""
+        if not text:
+            return self.CATEGORY_PUBLIC
+        if self._is_commercial_text(text):
+            return self.CATEGORY_COMMERCIAL
+        if self._is_party_text(text):
+            return self.CATEGORY_PARTY
+        return self.CATEGORY_PUBLIC
 
     def infer_category_from_keywords(self, text: str) -> str | None:
         """직설 키워드 + 은유 패턴으로 6대 불법 유형 추정."""
         if not text:
+            return None
+        if self._commercial_shield(text):
             return None
         if any(k in text for k in self.KW_CRIME_AD):
             return "범죄 조장·불법행위 광고"
@@ -603,23 +750,57 @@ class AIInferenceService:
             return "혐오·차별·비하 표현"
         return self.infer_category_from_euphemisms(text)
 
+    def _extract_markdown_field(self, raw: str, label: str) -> str:
+        """`- **라벨**: 값` 마크다운 필드 추출."""
+        if not raw:
+            return ""
+        pattern = rf"(?:^|\n)\s*[-*]\s*\*{{0,2}}{label}\*{{0,2}}\s*[:：]\s*([^\n]+)"
+        m = re.search(pattern, raw, re.IGNORECASE)
+        return m.group(1).strip() if m else ""
+
+    def _parse_legal_verdict_value(self, val: str) -> str | None:
+        if not val:
+            return None
+        if re.search(r"불법\s*가능|불법\s*의심", val):
+            return "ILLEGAL"
+        if "불법" in val and "합법" not in val:
+            return "ILLEGAL"
+        if "회색" in val:
+            return "GRAY"
+        if "합법" in val:
+            return "LEGAL"
+        return None
+
     def extract_vlm_legal_verdict(self, res: str) -> str | None:
-        """VLM이 스스로 내린 법적판정 (AI 추론 결과 우선)."""
+        """VLM 법적판정 — 마크다운 우선, 결론 블록 폴백."""
         for key in ("법적판정", "재검토결과", "해독결과"):
-            m = re.search(rf"{key}\s*[:：]\s*([^\n]+)", res)
-            if m:
-                val = m.group(1).strip()
-                if "불법" in val:
-                    return "ILLEGAL"
-                if "회색" in val:
-                    return "GRAY"
-                if "합법" in val:
-                    return "LEGAL"
+            if val := self._extract_markdown_field(res, key):
+                if verdict := self._parse_legal_verdict_value(val):
+                    return verdict
+        conclusion = self._extract_vlm_conclusion_section(res) or res
+        for key in ("법적판정", "재검토결과", "해독결과"):
+            m = re.search(rf"{key}\s*[:：]\s*([^\n]+)", conclusion)
+            if m and (verdict := self._parse_legal_verdict_value(m.group(1).strip())):
+                return verdict
         return None
 
     def extract_confidence(self, res: str) -> str:
-        m = re.search(r"신뢰도\s*[:：]\s*([^\n]+)", res)
+        if val := self._extract_markdown_field(res, r"신뢰도"):
+            return val
+        conclusion = self._extract_vlm_conclusion_section(res) or res
+        m = re.search(r"신뢰도\s*[:：]\s*([^\n]+)", conclusion)
         return m.group(1).strip() if m else "보통"
+
+    def _vlm_confidence_to_ocr(self, vlm_conf: str, has_text: bool) -> float:
+        """VLM 신뢰도 → OCR 신뢰도 (0~1). 임의 난수 사용 안 함."""
+        if not has_text:
+            return 0.0
+        conf = (vlm_conf or "").strip()
+        if "높음" in conf:
+            return 0.92
+        if "낮음" in conf:
+            return 0.72
+        return 0.85
 
     def is_low_confidence(self, res: str) -> bool:
         return "낮음" in self.extract_confidence(res)
@@ -631,115 +812,266 @@ class AIInferenceService:
         """AI 신뢰도 낮음·판정 불일치·회색지대일 때만 2차 심층 재검토."""
         if self.is_low_confidence(raw_clean):
             return True
-        if self._is_gray_category(category):
-            return True
         if vlm_legal_verdict == "ILLEGAL" and mapped_verdict == "LEGAL":
             return True
         if vlm_legal_verdict == "GRAY" and mapped_verdict == "LEGAL":
             return True
-        if mapped_verdict == "LEGAL" and self.should_trigger_euphemism_review(parsed_text, raw_clean):
-            print("[AI엔진] 은유·은어 심층검토 트리거 (합법 잔류 + 강한 신호)")
-            return True
         return False
+
+    def _map_legal_category(self, category: str, parsed_text: str) -> Dict[str, str]:
+        """합법 → 4대 분류 중 상업·공익성·정당."""
+        cat = self._normalize_category(category)
+        text = parsed_text or ""
+        if cat not in self.LEGAL_FOUR_CATEGORIES or cat == "":
+            cat = self._infer_four_category(text)
+
+        if cat == self.CATEGORY_COMMERCIAL:
+            return {
+                "ai_verdict": "LEGAL",
+                "status_code": "LEGAL_COMMERCIAL",
+                "category": self.CATEGORY_COMMERCIAL,
+                "judgment_title": f"✅ {self.CATEGORY_COMMERCIAL} (영리 광고)",
+                "violation": "없음 (내용 기준 합법)",
+            }
+        if cat == self.CATEGORY_PARTY:
+            return {
+                "ai_verdict": "LEGAL",
+                "status_code": "LEGAL_POLITICS",
+                "category": self.CATEGORY_PARTY,
+                "judgment_title": f"✅ {self.CATEGORY_PARTY} (정치·선거)",
+                "violation": "없음 (내용 기준 합법)",
+            }
+        return {
+            "ai_verdict": "LEGAL",
+            "status_code": "LEGAL_PUBLIC",
+            "category": self.CATEGORY_PUBLIC,
+            "judgment_title": f"✅ {self.CATEGORY_PUBLIC} (주민·캠페인·안내)",
+            "violation": "없음 (내용 기준 합법)",
+        }
 
     def map_category_to_verdict(
         self, category: str, parsed_text: str, raw_clean: str,
         vlm_legal_verdict: str | None = None,
     ) -> Dict[str, str]:
-        """AI 추론(법적판정) 우선 → 추천분류 정규화 → 키워드는 보조만."""
+        """VLM 법적판정 최우선. 합법 판정은 키워드로 불법 전환 금지."""
         category = self._normalize_category(category)
         literal = self.extract_literal_meaning(raw_clean)
-        combined = f"{parsed_text} {literal} {raw_clean}"
+        combined = f"{parsed_text} {literal}"
         unknown = category in ("", "알 수 없음 (수동검토)") or "알 수 없음" in category
 
-        # AI가 불법/회색이라고 결론냈으면 키워드로 덮어쓰지 않음
+        # 부동산·상업 광고는 사채/불법대출 없으면 무조건 상업(합법)
+        if self._commercial_shield(combined):
+            return self._map_legal_category(self.CATEGORY_COMMERCIAL, parsed_text)
+
         if vlm_legal_verdict == "GRAY":
-            return {
-                "ai_verdict": "LEGAL",
-                "status_code": "MANUAL_REVIEW",
-                "category": "회색지대 (사안별 판단)",
-                "judgment_title": f"⚠️ 회색지대 — AI 사안별 판단 필요",
-                "violation": "없음 (수동 검토 필요)",
-            }
+            vlm_legal_verdict = "LEGAL"
 
-        if vlm_legal_verdict == "ILLEGAL":
-            if not self._is_illegal_category(category):
-                kw_cat = self.infer_category_from_keywords(combined)
-                category = kw_cat if kw_cat else "명예훼손"
-        elif self._is_illegal_category(category):
-            pass
-        elif unknown and (kw_cat := self.infer_category_from_keywords(combined)):
-            category = kw_cat
-        elif self._is_gray_category(category):
-            return {
-                "ai_verdict": "LEGAL",
-                "status_code": "MANUAL_REVIEW",
-                "category": "회색지대 (사안별 판단)",
-                "judgment_title": f"⚠️ 회색지대 — 사안별 판단 필요 ({category})",
-                "violation": "없음 (수동 검토 필요)",
-            }
+        if vlm_legal_verdict == "LEGAL":
+            if self._normalize_category(category) == self.CATEGORY_ILLEGAL:
+                category = self._infer_four_category(parsed_text)
+            return self._map_legal_category(category, parsed_text)
 
-        if self._is_illegal_category(category):
+        if vlm_legal_verdict == "ILLEGAL" or self._normalize_category(category) == self.CATEGORY_ILLEGAL:
+            subtype = self.extract_illegal_subtype(raw_clean)
+            if infer := self.infer_category_from_keywords(combined):
+                if "혐오" in infer:
+                    subtype = "혐오"
+                elif "음란" in infer:
+                    subtype = "음란"
+                elif "범죄" in infer or "사채" in combined:
+                    subtype = "사행성"
             return {
                 "ai_verdict": "ILLEGAL",
                 "status_code": "ILLEGAL_CONTENT",
-                "category": category,
-                "judgment_title": f"🚨 불법 (내용 위반: {category})",
+                "category": f"{self.CATEGORY_ILLEGAL}({subtype})",
+                "judgment_title": f"🚨 {self.CATEGORY_ILLEGAL} · {subtype}",
                 "violation": "내용 자체가 불법 가능성 매우 높음",
             }
 
-        if "상업" in category:
+        # VLM 법적판정 미확정 — 불법 키워드만 보조, 나머지는 4대 분류 추론
+        if self._is_illegal_category(category):
+            subtype = self.extract_illegal_subtype(raw_clean)
             return {
-                "ai_verdict": "LEGAL",
-                "status_code": "LEGAL_COMMERCIAL",
-                "category": category,
-                "judgment_title": f"✅ 합법 (내용: {category} — 위치/허가 단속 대상)",
-                "violation": "없음 (위치 기준 단속 필요)",
+                "ai_verdict": "ILLEGAL",
+                "status_code": "ILLEGAL_CONTENT",
+                "category": f"{self.CATEGORY_ILLEGAL}({subtype})",
+                "judgment_title": f"🚨 {self.CATEGORY_ILLEGAL} · {subtype}",
+                "violation": "내용 자체가 불법 가능성 매우 높음",
             }
-        if any(k in category for k in ["정치", "정부", "정당"]):
+        if unknown and (kw := self.infer_category_from_keywords(combined)):
+            subtype = self.extract_illegal_subtype(raw_clean)
+            if "혐오" in kw:
+                subtype = "혐오"
+            elif "음란" in kw:
+                subtype = "음란"
+            elif "범죄" in kw:
+                subtype = "사행성"
             return {
-                "ai_verdict": "LEGAL",
-                "status_code": "LEGAL_POLITICS",
-                "category": category,
-                "judgment_title": f"✅ 합법 (내용: {category})",
-                "violation": "없음 (위치 기준 단속 필요)",
+                "ai_verdict": "ILLEGAL",
+                "status_code": "ILLEGAL_CONTENT",
+                "category": f"{self.CATEGORY_ILLEGAL}({subtype})",
+                "judgment_title": f"🚨 {self.CATEGORY_ILLEGAL} · {subtype}",
+                "violation": "내용 자체가 불법 가능성 매우 높음",
             }
-        return {
-            "ai_verdict": "LEGAL",
-            "status_code": "LEGAL_PUBLIC",
-            "category": category,
-            "judgment_title": f"✅ 합법 (내용: {category})",
-            "violation": "없음 (위치 기준 단속 필요)",
-        }
+        return self._map_legal_category(
+            category if not unknown else self._infer_four_category(parsed_text),
+            parsed_text,
+        )
 
     # ─── VLM 출력 구문 추출 및 파싱 ───
-    def is_placeholder(self, val: str) -> bool:
-        placeholders = [
-            "읽어낸", "핵심 글자", "요약", "묶였는지", "철제 틀", "명확히 묘사",
-            "사고 흐름", "논리적 근거", "한 문장", "해당하는 항목", "간단히 기술",
-            "확인 필요", "플레이스홀더", "분석 불가능"
-        ]
-        val_clean = val.strip("()[]{} ")
-        return any(p in val_clean for p in placeholders) or len(val_clean) == 0
+    _SECTION_HEADERS = {
+        "글자·내용 독해", "이미지 관찰", "의미 분석", "결론",
+        "현수막 원문 전체를 한 줄로", "설치 위치·배경만 간략히",
+        "의도 한 줄", "1차에서 읽은 원문 유지 또는 수정본",
+    }
 
-    def extract_category(self, res: str) -> str:
-        for pattern in (r"추천\s*분류\s*[:：]\s*([^\n]+)", r"내용\s*분류\s*[:：]\s*([^\n]+)", r"최종\s*분류\s*[:：]\s*([^\n]+)"):
+    def _is_section_header(self, val: str) -> bool:
+        t = val.strip().strip("*").strip()
+        if t in self._SECTION_HEADERS:
+            return True
+        return bool(re.fullmatch(r"글자[^:：\n]{0,8}독해", t))
+
+    def _clean_inline_field_dump(self, text: str) -> str:
+        """VLM이 한 줄에 텍스트+실질의미+법적판정을 이어 붙인 경우 앞부분만."""
+        if not text:
+            return ""
+        cleaned = text.strip().strip("\"'")
+        for sep in (
+            r"\s*-\s*실질의미\s*[:：]",
+            r"\s*-\s*법적판정\s*[:：]",
+            r"\s*-\s*추천분류\s*[:：]",
+            r"\s*-\s*불법세부\s*[:：]",
+            r"\s*-\s*신뢰도\s*[:：]",
+            r"\s*-\s*판단이유\s*[:：]",
+            r"\s*###\s*",
+        ):
+            cleaned = re.split(sep, cleaned, maxsplit=1)[0]
+        return cleaned.strip().strip("\"'")
+
+    def _sanitize_banner_text(self, text: str) -> str:
+        text = self._clean_inline_field_dump(text)
+        text = re.sub(r"\s+", " ", text).strip()
+        if not text or self.is_placeholder(text) or self._is_section_header(text):
+            return ""
+        return text[:500]
+
+    def is_placeholder(self, val: str) -> bool:
+        val_clean = val.strip().strip("()[]{} \"'*")
+        if len(val_clean) < 2:
+            return True
+        if self._is_section_header(val_clean):
+            return True
+        exact = {
+            "(원문)", "원문)", "원문", "N/A", "해당없음", "없음",
+            "간략히", "한 줄", "요약 금지", "없음 -",
+        }
+        if val_clean in exact:
+            return True
+        placeholders = [
+            "읽어낸", "핵심 글자", "묶였는지", "철제 틀", "명확히 묘사",
+            "사고 흐름", "논리적 근거", "해당하는 항목", "간단히 기술",
+            "확인 필요", "플레이스홀더", "분석 불가능",
+        ]
+        return any(p == val_clean or val_clean.startswith(p + " ") for p in placeholders)
+
+    def _extract_markdown_vlm_text(self, raw: str) -> str:
+        """VLM 마크다운 bullet 출력 — **글자·내용 독해**: 원문 우선."""
+        if not raw:
+            return ""
+        # 1) 글자·내용 독해 (최우선 — 프로그램 표시 텍스트의 기준)
+        for label in (
+            r"글자[^*\n:：]{0,12}독해",
+            r"텍스트",
+            r"결론",
+        ):
+            pattern = (
+                rf"(?:^|\n)\s*[-*]\s*\*{{0,2}}{label}\*{{0,2}}\s*[:：]\s*"
+                rf"(.+?)(?=\n\s*[-*]\s*\*{{0,2}}|\Z)"
+            )
+            m = re.search(pattern, raw, re.DOTALL | re.IGNORECASE)
+            if m and (cleaned := self._sanitize_banner_text(m.group(1))):
+                return cleaned
+        # 2) bullet 없이 **글자·내용 독해**: 형태
+        for label in (r"글자[^*\n:：]{0,12}독해", r"텍스트"):
+            pattern = rf"\*{{1,2}}{label}\*{{1,2}}\s*[:：]\s*(.+?)(?=\n\s*[-*]|\n\s*\*{{1,2}}|\Z)"
+            m = re.search(pattern, raw, re.DOTALL | re.IGNORECASE)
+            if m and (cleaned := self._sanitize_banner_text(m.group(1))):
+                return cleaned
+        return ""
+
+    def _extract_text_from_reading_section(self, raw: str) -> str:
+        """VLM 독해 블록 — 글자 원문이 여기 적히는 경우가 많음."""
+        reading = self._extract_reading_section(raw)
+        if not reading:
+            return ""
+        skip = (
+            "설치", "판정", "분류", "신뢰도", "이미지", "현수막", "분석", "결론",
+            "독해", "관찰", "의미", "법적", "추천", "불법세부", "해당없음", "요약",
+        )
+        lines: List[str] = []
+        for line in reading.split("\n"):
+            line = line.strip().strip("()[]{} ")
+            if len(line) < 2 or line.startswith("==="):
+                continue
+            m = re.match(r"^(?:텍스트|내용|문구)\s*[:：]\s*(.+)", line)
+            if m:
+                found = m.group(1).strip()
+                if found and not self.is_placeholder(found):
+                    lines.append(found)
+                continue
+            if any(k in line for k in skip):
+                continue
+            if self.is_placeholder(line):
+                continue
+            lines.append(line)
+        if not lines:
+            return ""
+        return re.sub(r"\s+", " ", " ".join(lines)).strip()[:500]
+
+    def _extract_text_label_legacy(self, res: str) -> str:
+        """이전 동작 복원 — 전체 VLM 출력에서 텍스트: 한 줄 스캔."""
+        for pattern in (
+            r"텍스트\s*[:：]\s*([^\n]+)",
+            r"적힌\s*(?:모든\s*)?내용\s*[:：]\s*([^\n]+)",
+            r"내용\s*[:：]\s*([^\n]+)",
+            r"문구\s*[:：]\s*([^\n]+)",
+        ):
             m = re.search(pattern, res, re.MULTILINE)
             if m:
-                found = m.group(1).strip().strip("()[]{} ")
+                found = m.group(1).strip().strip("\"'()")
+                if cleaned := self._sanitize_banner_text(found):
+                    return cleaned
+        return ""
+
+    def extract_category(self, res: str) -> str:
+        """추천분류 — 마크다운 우선, 결론 블록·키워드 폴백."""
+        for label in (r"추천\s*분류", r"내용\s*분류", r"최종\s*분류"):
+            if found := self._extract_markdown_field(res, label):
+                found = found.strip().strip("()[]{} ")
                 if not self.is_placeholder(found):
-                    return found[:40]
-        categories = (
-            self.ILLEGAL_CONTENT_CATEGORIES
-            + ["회색지대 (사안별 판단)", "기업·정책 비판"]
-            + self.LEGAL_CONTENT_CATEGORIES
-        )
-        for cat in categories:
-            if cat in res:
-                return cat
+                    return self._normalize_category(found[:40])
+        conclusion = self._extract_vlm_conclusion_section(res) or ""
+        scopes = [conclusion, res] if conclusion else [res]
+        for scope in scopes:
+            for pattern in (
+                r"추천\s*분류\s*[:：]\s*([^\n]+)",
+                r"내용\s*분류\s*[:：]\s*([^\n]+)",
+                r"최종\s*분류\s*[:：]\s*([^\n]+)",
+            ):
+                m = re.search(pattern, scope, re.MULTILINE)
+                if m:
+                    found = m.group(1).strip().strip("()[]{} ")
+                    if not self.is_placeholder(found):
+                        return self._normalize_category(found[:40])
+            for cat in [self.CATEGORY_ILLEGAL, self.CATEGORY_PARTY, self.CATEGORY_COMMERCIAL, self.CATEGORY_PUBLIC]:
+                if cat in scope:
+                    return cat
         return "알 수 없음 (수동검토)"
 
     def extract_reason(self, res: str) -> str:
+        if found := self._extract_markdown_field(res, r"판단\s*이유"):
+            if not self.is_placeholder(found):
+                return found[:200]
         for pattern in (
             r"요약\s*3\s*[:：]\s*([^\n]+)",
             r"판단\s*이유\s*[:：]\s*([^\n]+)",
@@ -753,21 +1085,23 @@ class AIInferenceService:
         return "분류 근거 식별 불가"
 
     def extract_banner_text(self, res: str) -> str:
-        """VLM이 읽은 현수막 원문 텍스트 추출."""
-        m = re.search(
-            r"텍스트\s*[:：]\s*(.+?)(?=\n\s*(?:실질의미|법적판정|추천분류|신뢰도|요약\s*1|요약1)\s*[:：]|\Z)",
-            res,
-            re.DOTALL | re.MULTILINE,
-        )
-        if m:
-            text = m.group(1).strip().strip("()[]{} ")
-            if text and not self.is_placeholder(text):
-                return re.sub(r"\s+", " ", text).strip()
-        m_line = re.search(r"텍스트\s*[:：]\s*([^\n]+)", res)
-        if m_line:
-            found = m_line.group(1).strip()
-            if found and not self.is_placeholder(found):
-                return found
+        """VLM이 읽은 현수막 원문 — 마크다운 → 결론 → 독해 → 레거시 순."""
+        if not res or "[VLM 추론 예외]" in res:
+            return ""
+        if md := self._extract_markdown_vlm_text(res):
+            return md
+        conclusion = self._extract_vlm_conclusion_section(res)
+        for scope in (conclusion, res):
+            if parsed := self._parse_text_field(scope):
+                return parsed
+        if reading := self._extract_text_from_reading_section(res):
+            return reading
+        if legacy := self._extract_text_label_legacy(res):
+            if cleaned := self._sanitize_banner_text(legacy):
+                return cleaned
+        if fallback := self._fallback_banner_text_scan(res):
+            if cleaned := self._sanitize_banner_text(fallback):
+                return cleaned
         return ""
 
     def _extract_summary_line(self, res: str, num: int) -> str:
@@ -792,11 +1126,12 @@ class AIInferenceService:
             return f"· {banner_text}"
         return "\n".join(f"· {line}" for line in lines)
 
-    def build_vlm_internal_record(self, raw: str, review_raw: str = "") -> str:
+    def build_vlm_internal_record(self, raw: str, review_raw: str = "", review_label: str = "") -> str:
         """DB·감사용 전체 VLM 원문 (UI 미노출)."""
-        parts = ["[VLM 원본]\n" + raw.strip()]
+        parts = ["[VLM 1차 분석]\n" + raw.strip()]
         if review_raw:
-            parts.append("\n[VLM 2차 재검토]\n" + review_raw.strip())
+            label = review_label or "2차 재검토"
+            parts.append(f"\n[VLM {label}]\n" + review_raw.strip())
         return "\n".join(parts)
 
     def build_vlm_user_summary(
@@ -805,31 +1140,26 @@ class AIInferenceService:
         category: str,
         judgment_title: str,
         vlm_conf: str,
-        raw_clean: str,
-        verify_clean: str = "",
+        final_source: str,
+        ai_verdict: str | None = None,
     ) -> str:
-        """WPF 표시용 — 인식 텍스트 나열 + 1.2.3. 초요약."""
-        source = verify_clean if verify_clean else raw_clean
-        s1 = self._extract_summary_line(source, 1)
-        s2 = self._extract_summary_line(source, 2)
-        s3 = self._extract_summary_line(source, 3)
+        """WPF 표시용 — 분석 결과만 짧게."""
+        conclusion = self._extract_vlm_conclusion_section(final_source) or final_source
+        legal = ai_verdict or self.extract_vlm_legal_verdict(conclusion) or "미확정"
+        legal_kr = {"ILLEGAL": "불법", "LEGAL": "합법", "GRAY": "회색지대"}.get(legal, legal)
 
-        if not s1:
-            s1 = banner_text if banner_text and banner_text != "텍스트 추출 불가" else "내용 인식 불명"
-        if not s2:
-            literal = self.extract_literal_meaning(source)
-            s2 = f"{category}" + (f" — {literal}" if literal else "")
-        if not s3:
-            s3 = self.extract_reason(source)
+        reason = self.extract_reason(final_source)
+        literal = self.extract_literal_meaning(final_source)
+        text_short = banner_text if banner_text and banner_text != "텍스트 추출 불가" else "인식 불명"
+        if len(text_short) > 60:
+            text_short = text_short[:60] + "…"
 
-        text_block = self.format_recognized_text_lines(banner_text)
-        return (
-            f"【인식 텍스트】\n{text_block}\n\n"
-            f"【AI 요약】 ({vlm_conf})\n"
-            f"1. {s1}\n"
-            f"2. {s2}\n"
-            f"3. {s3}"
-        )
+        lines = [f"{judgment_title}", f"판정: {legal_kr} | 분류: {category} | 신뢰도: {vlm_conf}"]
+        if literal and literal not in ("해당없음", "없음"):
+            lines.append(f"실질의미: {literal[:80]}")
+        lines.append(f"판단: {reason}")
+        lines.append(f"텍스트: {text_short}")
+        return "\n".join(lines)
 
     # ─── 핵심 추론 및 가공 파이프라인 ───
     def _run_inference_raw(self, image_path: str, cctv_id: str = "CCTV_01", is_automation: bool = True) -> List[Dict[str, Any]]:
@@ -859,14 +1189,15 @@ class AIInferenceService:
             display_scale = 1.0
 
         img_h, img_w, _ = img_cv.shape
-        yolo_results = self.yolo(img_cv, verbose=False, device=self.device)
+        yolo_device = 0 if self.device == "cuda" else "cpu"
+        yolo_results = self.yolo(img_cv, verbose=False, device=yolo_device)
         boxes = yolo_results[0].boxes
 
         results: List[Dict[str, Any]] = []
 
         for i, box in enumerate(boxes.xyxy):
             x1, y1, x2, y2 = map(int, box.tolist())
-            conf = float(boxes.conf[i])
+            conf = self._safe_yolo_conf(boxes, i)
 
             x1 = max(0, x1)
             y1 = max(0, y1)
@@ -885,14 +1216,18 @@ class AIInferenceService:
             ocr_conf = 0.0
 
             # ── DB 대조 중복 제어 (IoU 0.4 기반 기존 캐시 매칭) ──
-            matched = self.db_service.find_matching_banner(cctv_id, [x1, y1, x2, y2])
+            # VLM 검증 이미지는 항상 신규 추론 (DB 캐시로 잘못된 판정 재사용 방지)
+            matched = (
+                None if cctv_id.startswith("VLM_")
+                else self.db_service.find_matching_banner(cctv_id, [x1, y1, x2, y2])
+            )
             
             is_vlm_triggered = False
             vlm_analysis = ""
             banner_type = "일반현수막"
             environment = "가로수 또는 전봇대 끈 묶음 설치"
             violation = "없음"
-            status_code = "ILLEGAL_COMMERCIAL"  # 기본값
+            status_code = "PENDING_VLM"  # VLM 완료 전 중립 (UI 불법 오표시 방지)
             
             # 구/동/위치 매핑
             gu, dong, full_address = self._get_cctv_location(cctv_id)
@@ -939,7 +1274,7 @@ class AIInferenceService:
                     
                     ai_verdict_str = "ILLEGAL" if ai_verdict == "불법" else "LEGAL"
                     if ai_verdict_str == "ILLEGAL":
-                        status_code = "ILLEGAL_COMMERCIAL"
+                        status_code = "ILLEGAL_CONTENT"
                     else:
                         norm_text_cache = re.sub(r'[\s\-\_\,\.\?\!\@\#\$\%\^\&\*\(\)\+]', '', ocr_text)
                         if any(kw in norm_text_cache for kw in self.ELECTION_EXEMPT):
@@ -967,12 +1302,13 @@ class AIInferenceService:
                 except Exception as e:
                     raw = f"[VLM 추론 예외] {e}"
 
-                # 가공 및 구문 파싱
-                raw_clean = raw.replace("<", "").replace(">", "").replace("[", "").replace("]", "").replace("(", "").replace(")", "")
-                
-                parsed_text = self.extract_banner_text(raw_clean)
+                # 텍스트는 원본 VLM 출력에서 먼저 추출 (괄호 제거 전)
+                parsed_text = self.extract_banner_text(raw)
                 ocr_text = parsed_text if parsed_text else "텍스트 추출 불가"
-                
+
+                # 분류·키워드용만 특수문자 정리
+                raw_clean = raw.replace("<", "").replace(">", "").replace("[", "").replace("]", "")
+
                 category = self.extract_category(raw_clean)
                 vlm_legal = self.extract_vlm_legal_verdict(raw_clean)
 
@@ -985,53 +1321,65 @@ class AIInferenceService:
                 judgment_title = verdict["judgment_title"]
                 violation = verdict["violation"]
 
-                verify_raw = ""
-                if self.needs_deep_review(category, ocr_text, raw_clean, ai_verdict, vlm_legal):
+                review_raw = ""
+                review_label = ""
+                if self.needs_euphemism_decode(category, ocr_text, raw_clean, ai_verdict):
                     try:
-                        print("[AI엔진] VLM 2차 심층 재검토 (AI 추론 보완)")
-                        verify_raw = self.run_vlm_verification_pass(
+                        print("[AI엔진] VLM 2차 은유·은어 해독")
+                        review_label = "2차 은유해독"
+                        review_raw = self.run_vlm_euphemism_decode_pass(
+                            context_crop, zoom_crop, ocr_text, category
+                        )
+                    except Exception as ee:
+                        review_raw = f"[2차 은유해독 예외] {ee}"
+                elif self.needs_deep_review(category, ocr_text, raw_clean, ai_verdict, vlm_legal):
+                    try:
+                        print("[AI엔진] VLM 2차 심층 재검토")
+                        review_label = "2차 심층재검토"
+                        review_raw = self.run_vlm_verification_pass(
                             context_crop, zoom_crop, raw, ocr_text
                         )
-                        verify_clean = verify_raw.replace("<", "").replace(">", "")
-                        category = self.extract_category(verify_clean) or category
-                        vlm_legal = self.extract_vlm_legal_verdict(verify_clean) or vlm_legal
-                        verdict = self.map_category_to_verdict(
-                            category, ocr_text, verify_clean, vlm_legal_verdict=vlm_legal
-                        )
-                        ai_verdict = verdict["ai_verdict"]
-                        status_code = verdict["status_code"]
-                        category = verdict["category"]
-                        judgment_title = verdict["judgment_title"]
-                        violation = verdict["violation"]
                     except Exception as ve:
-                        verify_raw = f"[2차 심층 재검토 예외] {ve}"
+                        review_raw = f"[2차 심층 재검토 예외] {ve}"
 
-                verify_clean = verify_raw.replace("<", "").replace(">", "") if verify_raw else ""
-                if verify_clean:
-                    revised = self.extract_banner_text(verify_clean)
-                    if revised:
+                review_clean = review_raw.replace("<", "").replace(">", "") if review_raw else ""
+                if review_clean and "[2차" not in review_clean:
+                    revised = self.extract_banner_text(review_raw or review_clean)
+                    # 2차가 1차보다 짧거나 빈 값이면 1차 텍스트 유지 (추출 훼손 방지)
+                    if revised and (
+                        ocr_text in ("", "텍스트 추출 불가", "텍스트 미추출 (식별 불가)")
+                        or len(revised) >= max(8, len(ocr_text) * 0.5)
+                    ):
                         ocr_text = revised
+                    category = self.extract_category(review_clean) or category
+                    vlm_legal = self.extract_vlm_legal_verdict(review_clean) or vlm_legal
+                    verdict = self.map_category_to_verdict(
+                        category, ocr_text, review_clean, vlm_legal_verdict=vlm_legal
+                    )
+                    ai_verdict = verdict["ai_verdict"]
+                    status_code = verdict["status_code"]
+                    category = verdict["category"]
+                    judgment_title = verdict["judgment_title"]
+                    violation = verdict["violation"]
 
                 banner_type = "정당/정치 현수막" if any(k in category for k in ["정치", "정부", "정당"]) else ("공공 현수막" if "공공" in category else "일반 현수막")
-                environment = "내용 판별 모드 (AI 이미지+텍스트 추론)"
+                environment = "내용 판별 모드 (AI 이미지+텍스트 정밀 추론)"
 
-                vlm_conf_text = self.extract_confidence(verify_clean or raw_clean)
+                final_source = review_clean or raw_clean
+                vlm_conf_text = self.extract_confidence(final_source)
                 vlm_analysis = self.build_vlm_user_summary(
-                    ocr_text, category, judgment_title, vlm_conf_text, raw_clean, verify_clean
+                    ocr_text, category, judgment_title, vlm_conf_text, final_source,
+                    ai_verdict=ai_verdict,
                 )
                 ai_reason = (
                     f"[{judgment_title}] (AI 신뢰도: {vlm_conf_text})\n\n"
-                    f"{self.build_vlm_internal_record(raw, verify_raw)}"
+                    f"{self.build_vlm_internal_record(raw, review_raw, review_label)}"
                 )
                 
-                # 글자 인식률(ocr_conf)을 VLM 결과 기반으로 생성 (사용자 요청: 문자 판독율에 적시)
-                if ocr_text and ocr_text != "텍스트 미추출 (식별 불가)":
-                    import random
-                    base_conf = 88.0 + min(len(ocr_text) * 0.4, 11.5)
-                    # 0~1 스케일로 정규화 (WPF OcrConfidence 계약)
-                    ocr_conf = round((base_conf + random.random() * 0.4) / 100.0, 4)
-                else:
-                    ocr_conf = 0.0
+                ocr_conf = self._vlm_confidence_to_ocr(
+                    vlm_conf_text,
+                    bool(ocr_text and ocr_text not in ("텍스트 추출 불가", "텍스트 미추출 (식별 불가)")),
+                )
 
                 # DB 저장 또는 갱신
                 detect_info = {
@@ -1138,7 +1486,8 @@ class AIInferenceService:
             display_scale = 1.0
 
         img_h, img_w, _ = img_cv.shape
-        yolo_results = self.yolo(img_cv, verbose=False, device=self.device)
+        yolo_device = 0 if self.device == "cuda" else "cpu"
+        yolo_results = self.yolo(img_cv, verbose=False, device=yolo_device)
         boxes = yolo_results[0].boxes
 
         _, _, full_address = self._get_cctv_location(cctv_id)
@@ -1172,7 +1521,7 @@ class AIInferenceService:
         events: List[BannerDetectionEvent] = []
         for i, box in enumerate(boxes.xyxy):
             x1, y1, x2, y2 = map(int, box.tolist())
-            conf = float(boxes.conf[i])
+            conf = self._safe_yolo_conf(boxes, i)
 
             x1 = max(0, x1)
             y1 = max(0, y1)
@@ -1210,7 +1559,7 @@ class AIInferenceService:
                     CropImageUri="",
                     CroppedImageBase64=crop_b64,
                     FullImageBase64=full_img_b64,
-                    StatusCode="ILLEGAL_COMMERCIAL",
+                    StatusCode="PENDING_VLM",
                 )
             )
 
