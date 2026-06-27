@@ -45,7 +45,7 @@ public class PdfReportService
     {
         container.Column(column =>
         {
-            column.Item().AlignCenter().Text("불법 옥외광고물 단속 및 과태료 부과 요청서")
+            column.Item().AlignCenter().Text("불법 옥외광고물 단속 및 행정 조치 요청서")
                 .FontFamily("Malgun Gothic")
                 .FontSize(20)
                 .Bold()
@@ -209,7 +209,7 @@ public class PdfReportService
             {
                 text.ParagraphSpacing(5);
                 text.Line("본 광고물은 관련 법령(옥외광고물 등의 관리와 옥외광고산업 진흥에 관한 법률 제3조 및 제10조)에 의거하여 허가 또는 신고를 거치지 않고 무단으로 표시·설치된 불법 광고물로 판정되었습니다.").FontSize(9.5f);
-                text.Line("CCTV 실시간 탐지 시스템(YOLOv8/v11 객체 탐지 및 EasyOCR 텍스트 인식)과 Qwen2.5-VL 기반 다중 에이전트 합의 판정 알고리즘을 통해 자동 적발되었으며, 상기 증거 사진에 기반하여 위법 사실이 명백하므로 과태료 부과 및 행정 조치(강제 철거 등)를 요청합니다.").FontSize(9.5f);
+                text.Line("CCTV 실시간 탐지 시스템(YOLOv8/v11 객체 탐지 및 EasyOCR 텍스트 인식)과 Qwen2.5-VL 기반 다중 에이전트 합의 판정 알고리즘을 통해 자동 적발되었으며, 상기 증거 사진에 기반하여 위법 사실이 명백하므로 행정 조치(강제 철거 등)를 요청합니다.").FontSize(9.5f);
             });
         });
     }

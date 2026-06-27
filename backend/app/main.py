@@ -16,12 +16,10 @@ from app.api import websocket_endpoints
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """FastAPI 구동 시점에 YOLO 및 EasyOCR 모델을 스레드풀에서 미리 안전하게 로드합니다."""
-    print("[서버] 시작 중 — AI 모델 미리 로드 시작...")
-    from app.api.websocket_endpoints import get_ai_service
-    loop = asyncio.get_running_loop()
-    await loop.run_in_executor(None, get_ai_service)
-    print("[서버] AI 모델 미리 로딩 성공!")
+    """포트를 먼저 열고, AI 모델은 백그라운드에서 로드합니다."""
+    print("[서버] 포트 즉시 오픈 — AI 모델은 백그라운드 로드")
+    from app.api.websocket_endpoints import start_ai_service_background
+    start_ai_service_background()
     yield
     print("[서버] 종료 중...")
 
@@ -57,9 +55,11 @@ async def root():
 
 @app.get("/health")
 async def health():
+    from app.api.websocket_endpoints import is_ai_service_ready
     return {
-        "status": "healthy",
-        "environment": "real_inference"
+        "status": "healthy" if is_ai_service_ready() else "warming_up",
+        "environment": "real_inference",
+        "ai_ready": is_ai_service_ready(),
     }
 
 if __name__ == "__main__":

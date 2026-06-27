@@ -1,0 +1,273 @@
+# 시스템 설정 화면 구현 계획서 (우선순위 및 1-by-1 원칙 적용)
+
+## 📎 참조 자료
+- 목업 이미지: `시스템설정.png`
+- 사이드바 메뉴: MainWindow.xaml → CommandParameter="Settings" (라우팅 **미구현**)
+- 기존 모델: `AppSettings.cs` (API URL 4필드만), `CctvChannel` (모니터링용, IP/해상도 없음)
+- 선행 완료 화면: `EnforcementStatusView`, `StatisticsReportView` (탭·카드·토글·슬라이더 패턴 참고)
+- 백엔드: YOLO conf 임계값·VLM ON/OFF **런타임 설정 API 없음** → 1차 WPF 로컬 저장, 2차 REST 연동
+
+---
+
+## 🎯 핵심 원칙: 1-by-1 (단계별 검증)
+6개 탭을 한 화면에 몰아 넣지 않고, **탭 뼈대 → 탭별 ViewModel 섹션 → 저장/취소 → 권한 연동** 순으로
+각 Step 완료 후 `시스템설정.png` 및 요구사항 표와 대조 검증한다.
+
+---
+
+## 📐 목업 vs 요구사항 정합
+
+| 구분 | 목업 PNG (`시스템설정.png`) | 요구사항 (6탭) | 계획 |
+|------|---------------------------|----------------|------|
+| 레이아웃 | 3×2 카드 그리드 (탭 없음) | 6개 상단 탭 | **6탭 구조** 채택, PNG 카드는 탭 내부 UI로 재배치 |
+| CCTV | 우측 상단 미니 테이블 4행 | 전용 탭 + IP/해상도/편집·삭제 | 탭1 전체 테이블, PNG는 **요약 카드** 옵션 |
+| AI 탐지 | YOLO 70%, 시간필터, VLM | AI 탐지 탭 전체 | 탭2 — PNG 슬라이더·토글 **그대로 이식** |
+| 알림 | 긴급 85%, 알림 방식 | 알림 탭 전체 | 탭3 — PNG + SMS/야간 세부 |
+| 관할/사용자/데이터 | PNG에 없음 | 탭4·5·6 | Mock + WebView2 지도 |
+
+---
+
+## 📐 화면 레이아웃 (최종 목표)
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│ ⚙ 시스템 설정                                                             │
+├──────────────────────────────────────────────────────────────────────────┤
+│ [CCTV관리][AI탐지●][알림][관할구역][사용자][데이터]                          │
+├──────────────────────────────────────────────────────────────────────────┤
+│  ← 선택 탭 Content (UserControl 전환)                                     │
+├──────────────────────────────────────────────────────────────────────────┤
+│                    [초기화]  [변경사항 취소]  [저장]     ← 공통 푸터 (탭2~6) │
+└──────────────────────────────────────────────────────────────────────────┘
+│ Toast: "설정이 저장되었습니다" (PNG 하단 토스트 재현)                        │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+※ 탭1(CCTV)은 하단 **CCTV 추가 / 전체 재연결 / 선택 삭제** 전용.
+※ 탭2·3은 PNG와 동일하게 **초기화 / 취소 / 저장** 3버튼.
+
+---
+
+## 🗂 데이터 모델 설계
+
+### 공통
+| 클래스 | 용도 |
+|--------|------|
+| `SystemSettingsRoot` | 전체 설정 JSON 루트 (직렬화·`appsettings.local.json`) |
+| `SettingsTab` | enum: Cctv, AiDetection, Notification, Jurisdiction, User, Data |
+| `ISettingsRepository` | Load / Save / Reset / ResetTab |
+| `SettingsChangedEvent` | 저장 시 MainViewModel·백엔드에 전파 |
+
+### 탭1 — CCTV
+| 클래스 | 필드 |
+|--------|------|
+| `CctvConfigItem` | ChannelId, ChannelName, Gu, Dong, ZoneLabel, IpAddress, Resolution, Status(정상/지연/끊김), AiAnalysisEnabled |
+| `CctvManagementSettings` | Items[], SelectedIds[] |
+
+**Mock (목업 PNG 기준)**
+| 채널 | 위치 | 상태 | AI |
+|------|------|------|-----|
+| CCTV-01 | 역삼동 A구역 | 정상 | ON |
+| CCTV-02 | 역삼동 B구역 | 정상 | ON |
+| CCTV-03 | 서초동 C구역 | 지연 | ON |
+| CCTV-04 | 잠실동 D구역 | 끊김 | OFF |
+
+### 탭2 — AI 탐지
+| 클래스 | 필드 | Mock 기본값 |
+|--------|------|-------------|
+| `AiDetectionSettings` | YoloThresholdPct (50~95) | **70** |
+| | ExpectedDetectionsPerHour | **144** (슬라이더 연동 계산) |
+| | MinDurationFilter | 10분/30분/1시간 | 30분 |
+| | UrgentDurationFilter | 30분/1시간/2시간 | 1시간 |
+| | NightDoubleEnabled | true (22~06시 2배) |
+| | VlmEnabled | true |
+| | VlmModel | 기본/고성능 | 고성능(PaliGemma) |
+| | ExcludedCategories[] | 정치/상업/종교/행사/개인/민원 체크 | 전부 포함(미제외) |
+
+### 탭3 — 알림
+| 클래스 | 필드 | Mock 기본값 |
+|--------|------|-------------|
+| `NotificationSettings` | UrgentConfidencePct | **85** |
+| | UrgentCommercial / SchoolZone / Duration1h | bool |
+| | PopupEnabled (항상 true, disabled) | true |
+| | Sound / Email / Sms | bool + EmailAddress, SmsNumber |
+| | NightStart, NightEnd | 22:00, 06:00 |
+| | NightMode | 화면만/진동만/전체OFF |
+
+### 탭4 — 관할 구역
+| 클래스 | 필드 |
+|--------|------|
+| `JurisdictionSettings` | City, District |
+| | LegalBoardItems[] (위치, 규격, 관리번호) |
+| | SchoolZoneItems[] (학교명, 반경m, PolygonWkt) |
+
+**Mock 게시대 3건, 학교 2건 (송도/역삼 샘플)**
+
+### 탭5 — 사용자
+| 클래스 | 필드 |
+|--------|------|
+| `UserAccountItem` | UserId, Name, Rank, Role(관리자/담당자/조회), LastLogin, IsActive |
+
+**Mock**
+| 아이디 | 이름 | 직급 | 권한 | 상태 |
+|--------|------|------|------|------|
+| admin_kim | 김무주 | 주무관 | 관리자 | 활성 |
+| officer_lee | 이주희 | 계장 | 담당자 | 활성 |
+| viewer_park | 박조회 | 주무관 | 조회만 | 활성 |
+
+**권한 매트릭스 (요구사항)**
+| 메뉴 | 관리자 | 담당자 | 조회 |
+|------|--------|--------|------|
+| 실시간/VLM/CCTV 모니터링 | ✓ | ✓ | ✓ |
+| 신고 접수 | ✓ | ✓ | ✓ |
+| 단속 처리 | 처리 | 처리 | 조회만 |
+| 통계/리포트 | ✓ | ✓ | ✓ |
+| 시스템 설정 | ✓ | 제한 | 제한 |
+
+→ `MainViewModel` 사이드바 `IsEnabled` + 설정 탭 Visibility 바인딩.
+
+### 탭6 — 데이터
+| 클래스 | 필드 |
+|--------|------|
+| `DataManagementSettings` | AutoBackupCycle, BackupTime, BackupPath |
+| | DetectionLogRetention, ReportRetention, RecordingRetention |
+| | ExportBeforeDelete |
+
+---
+
+## 🚀 작업 우선순위 (Execution Steps)
+
+### [Step 1] 뼈대: 네비게이션 + 6탭 TabControl
+* 작업:
+  1. `Views/SystemSettingsView.xaml` 생성.
+  2. `MainViewModel.NavigateCommand`에 `Settings` 분기.
+  3. 상단 6탭 `TabControl` 또는 RadioTab + `ContentControl` 전환.
+  4. 공통 푸터(저장/취소/초기화) + Snackbar 토스트 영역.
+* 검증: 사이드바 "시스템 설정" 클릭 → 빈 탭 6개 전환.
+
+### [Step 2] 설정 저장 인프라
+* 작업:
+  1. `Services/ISettingsRepository.cs` + `JsonSettingsRepository.cs`
+     (`%AppData%/BannerGuard/appsettings.local.json`)
+  2. `SystemSettingsRoot` 모델 + 기본값 팩토리 (Mock 수치).
+  3. `SystemSettingsViewModel` — Dirty 플래그, Save/Cancel/Reset 커맨드.
+* 검증: 저장 후 재실행 시 값 유지.
+
+### [Step 3] 탭1 — CCTV 관리
+* 작업:
+  1. `Views/Settings/CctvManagementTab.xaml`
+  2. DataGrid/ListView: 채널명·위치·IP·해상도·상태 Dot·AI Toggle·편집/삭제
+  3. `CctvAddDialog` (IP, 위치, 채널명)
+  4. 하단: CCTV 추가 / 전체 재연결 / 선택 삭제
+  5. `MainViewModel.Channels`와 **양방향 동기화** (ChannelId 매핑)
+* 검증: PNG 4행과 동일, AI 토글 OFF 시 해당 채널 분석 스킵 플래그.
+
+### [Step 4] 탭2 — AI 탐지 설정 (PNG 핵심)
+* 작업:
+  1. YOLO 슬라이더 50~95%, 권장 65~80% 배지, 예상 탐지량 라벨
+  2. 지속시간·긴급분류 ComboBox, 야간 2배 CheckBox
+  3. VLM Toggle + 모델 ComboBox
+  4. 내용분류 6체크박스 (제외 카테고리)
+  5. 탭 푸터: 초기화/취소/저장
+* 검증: 슬라이더 70% → "약 144건/시간" (선형 Mock 공식).
+
+### [Step 5] 탭3 — 알림 설정 (PNG 핵심)
+* 작업:
+  1. 긴급 신뢰도 슬라이더 85%
+  2. 긴급 조건 체크 3종
+  3. 알림 방식: 팝업(고정) / 사운드 / 이메일+주소 / SMS+번호
+  4. 야간 22~06, 방식 Radio 3종
+* 검증: PNG 알림 카드와 동일 배치.
+
+### [Step 6] 탭4 — 관할 구역
+* 작업:
+  1. 시/도·구/군 ComboBox
+  2. WebView2 관할 경계 미리보기 (Google Maps embed)
+  3. 합법 게시대 테이블 + CRUD + CSV 업로드 (OpenFileDialog)
+  4. 학교 목록 + 반경 NumericUpDown + 지도 폴리곤 (1차: 반경 원 Mock)
+* 검증: CSV 1건 업로드 후 목록 갱신.
+
+### [Step 7] 탭5 — 사용자 관리
+* 작업:
+  1. 사용자 테이블 6컬럼
+  2. 추가/권한변경/활성토글/비밀번호 초기화 다이얼로그
+  3. `CurrentUserRole` 프로퍼티 → MainWindow 메뉴 Enable 바인딩
+* 검증: "조회만" 로그인 시 설정 메뉴 비활성 또는 읽기전용.
+
+### [Step 8] 탭6 — 데이터 관리
+* 작업:
+  1. 자동 백업 주기·시간·경로
+  2. 보관 기간 3종 ComboBox
+  3. 수동 백업 / 일괄 삭제 (확인 MessageBox)
+  4. 전체 초기화 2단계 Confirm + 설정만 초기화
+* 검증: 수동 백업 → zip 또는 db 복사 성공 토스트.
+
+### [Step 9] 시스템 정보 카드 (PNG 우하단)
+* 작업:
+  1. 모든 탭 우측 또는 AI탭 하단에 **시스템 정보** 고정 카드
+  2. YOLO v8.2, VLM 모델명, SQLite, 서버상태, CPU/RAM/디스크
+  3. `MainViewModel` 텔레메트리 바인딩 재사용
+* 검증: CPU/RAM 실시간 갱신.
+
+### [Step 10] 백엔드 연동 스텁 (선택·2차)
+* 작업:
+  1. `POST /api/settings/ai` — yolo_conf, vlm_enabled
+  2. WebSocket `update_settings` 커맨드
+  3. 저장 시 `BackendManager` 경유 API 호출
+* 검증: 임계값 변경 후 추론 conf 반영 (백엔드 수정 필요).
+
+---
+
+## 🛠 기술 결정
+
+| 항목 | 결정 |
+|------|------|
+| 탭 전환 | `TabControl` + 각 탭 `UserControl` (유지보수) |
+| 상태 인디케이터 | 녹/주/적 `Ellipse` + `ChannelStatus` enum 확장 |
+| 토글 | MaterialDesign `ToggleButton` 스타일 (통계/단속 화면과 통일) |
+| 슬라이더 | WPF `Slider` + 양방향 바인딩 |
+| 지도 | WebView2 (RealTimeMonitoringView 패턴 재사용) |
+| CSV | `CsvHelper` 또는 수동 파싱 (경량) |
+| 권한 | 1차 Mock CurrentUser, 2차 SQLite users 테이블 |
+| 저장 | JSON 로컬 파일 + 저장 시 Snackbar |
+
+---
+
+## 📋 현재 코드베이스 갭
+
+| 항목 | 상태 |
+|------|------|
+| Settings 라우팅 | ❌ |
+| SystemSettingsView | ❌ |
+| AppSettings 확장 | ❌ (4필드만) |
+| CctvChannel IP/해상도 | ❌ |
+| 설정 영속화 | ❌ |
+| 사용자/권한 | ❌ |
+| 백엔드 설정 API | ❌ |
+| PNG 토스트 UI | ❌ |
+
+---
+
+## ✅ Step별 체크리스트
+
+- [ ] Step 1: 설정 메뉴 → 6탭 화면
+- [ ] Step 2: JSON 저장/로드
+- [ ] Step 3: CCTV 테이블 + 추가 팝업
+- [ ] Step 4: YOLO 70% + VLM (PNG 일치)
+- [ ] Step 5: 알림 85% + 야간
+- [ ] Step 6: 관할 + 게시대 CSV
+- [ ] Step 7: 사용자 + 권한 매트릭스
+- [ ] Step 8: 백업/보관/초기화
+- [ ] Step 9: 시스템 정보 카드
+- [ ] Step 10: 백엔드 API (2차)
+
+---
+
+## 🏁 결론
+
+1. **Step 1~2**로 탭 뼈대와 JSON 저장을 먼저 확정한다.
+2. **Step 3~5**에서 목업 PNG와 겹치는 **CCTV·AI·알림**을 우선 완성한다 (사용자 체감 최대).
+3. **Step 6~8**로 관할·사용자·데이터 탭을 Mock으로 채운다.
+4. **Step 9~10**으로 시스템 정보·백엔드 연동을 마무리한다.
+
+단속/통계 화면과 동일한 **1-by-1 원칙**으로, 탭 하나씩 스크린샷 검증 후 다음 탭으로 진행한다.

@@ -10,8 +10,16 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        DispatcherUnhandledException += (_, args) =>
+        {
+            Services.BackendManager.Log($"[WPF-Crash] {args.Exception}");
+            MessageBox.Show($"오류가 발생했습니다.\n{args.Exception.Message}", "BannerGuardSystem",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+            args.Handled = true;
+        };
         
-        // Start the background python backend server
+        // WPF 시작 시 AI 서버 자동 기동
         Services.BackendManager.Start();
         
         // Initialize QuestPDF Community License
@@ -32,7 +40,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        // Stop the background python backend server
+        // WPF 종료 시 AI 서버 자동 종료
         Services.BackendManager.Stop();
         
         LibVLC?.Dispose();

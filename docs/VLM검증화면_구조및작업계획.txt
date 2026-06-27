@@ -1,0 +1,372 @@
+================================================================================
+  BannerGuardSystem — VLM 검증 화면 구조도 & 다음 작업 가이드
+  작성일: 2026-06-27
+  대상 파일: RealTimeMonitoringView (사이드바 메뉴 "VLM 검증")
+  목적: 다음 작업 전 설계·역할·데이터 흐름·수정 방향을 한 문서에 고정
+================================================================================
+
+
+■ 0. 한 줄 요약
+--------------------------------------------------------------------------------
+VLM 검증 화면은 "사람이 최종 판단하는 검토 데스크"이다.
+CCTV 모니터링이 LIVE 영상+YOLO 다중 박스라면,
+VLM 검증은 "분석 프레임 스냅샷 + YOLO 박스 1개 + VLM(Qwen) 텍스트 + 승인/기각"이다.
+
+데이터는 WebSocket channel_batch → MainViewModel.AlertFeed / ActiveAlert 로 들어온다.
+화면은 MainViewModel 하나를 DataContext로 공유한다 (별도 ViewModel 없음).
+
+
+■ 1. 앱 내 위치 & 네비게이션
+--------------------------------------------------------------------------------
+
+[MainWindow]
+  사이드바 RadioButton "VLM 검증"
+    Command: NavigateCommand
+    Parameter: "RealTimeMonitoring"
+  ContentControl Content="{Binding CurrentView}"
+    → RealTimeMonitoringView 인스턴스 (MainViewModel._realTimeMonitoringView)
+
+[기본 시작 화면]
+  MainViewModel 생성자에서 CurrentView = RealTimeMonitoringView (기본 탭)
+
+[관련 화면과 관계]
+  - CCTV 모니터링 (CctvMonitoringView): LIVE MP4, 채널당 YOLO 박스 N개
+  - VLM 검증 (RealTimeMonitoringView): 정지 스냅샷, ActiveAlert 1건 상세
+  - 신고 접수 목록 (ReportListView): 별도 ViewModel
+
+
+■ 2. 화면 레이아웃 (RealTimeMonitoringView.xaml)
+--------------------------------------------------------------------------------
+
+Grid 5행 구조:
+
+  Row 0  [KPI 3카드 — UniformGrid Columns=3]
+           - 오늘 탐지 건수    → TodayDetectionCount
+           - 처리 대기         → PendingCount, EmergencyCount
+           - 처리 완료         → CompletedCount
+           ※ "전일 대비 +12%", "평균 처리 4.2분" 등 일부 문구는 하드코딩 (미연동)
+
+  Row 2  [중단 2열 — 55% : 45%]
+    좌: 실시간 의심 현수막 목록 (ListBox → AlertFeed)
+        - 썸네일: CroppedImageBase64 + ImageLoaderConverter
+        - 위치/시간/OCR 미리보기/신뢰도
+        - "검토" 버튼 → SelectAlertCommand → ActiveAlert 설정
+        - 필터 탭 (전체/긴급/일반): UI만 있음, 로직 없음
+        - 검색 TextBox: UI만 있음, 로직 없음
+
+    우: 탐지 위치 맵 (WebView2 → Google Maps iframe)
+        - MapQuery 바인딩 (채널 Address)
+        - 지도/CCTV 스위치 UI: 동작 없음 (지도만 표시)
+        - RealTimeMonitoringView.xaml.cs UpdateMap() 에서 HTML 생성
+
+  Row 4  [하단 상세 검증 패널 — 높이 260px 고정]
+    3열: 스냅샷(3.5*) | VLM텍스트(4.5*) | 액션버튼(2*)
+
+    [스냅샷 영역]
+      YoloBBoxOverlay
+        Alert          = ActiveAlert
+        FrameSource    = ActiveAlert.FullImageBase64
+        IsActive       = HasActiveAlert
+        FrameOpacity   = 0.92
+        OverlayOnly    = false (기본) → 배경에 전체 프레임 + bbox Viewbox 좌표계
+      라벨: SNAPSHOT - {SelectedChannel.ChannelId}
+      빈 상태: HasNoActiveAlert → "수신된 현수막 탐지 이벤트가 없습니다."
+
+    [VLM 텍스트 영역]
+      헤더: YOLO 탐지율(ActiveAlert.YoloConfidenceText), OCR 판독율(OcrConfidenceText)
+      크롭 미리보기: ActiveAlert.CroppedImageBase64
+      본문: ActiveAlert.VlmAnalysis (Qwen 전체 출력 문자열)
+      빈 상태: "AI 분석 결과가 없습니다."
+
+    [액션 버튼]
+      "합법 확인"  → ApproveCommand  ┐
+      "불법 확정"  → ApproveCommand  ┘ 동일 Command (구분 없음 — 버그/미구현)
+      "재검토 요청" → DismissCommand
+
+
+■ 3. ViewModel 상태 (MainViewModel.cs)
+--------------------------------------------------------------------------------
+
+[VLM 화면이 직접 쓰는 프로퍼티]
+
+  AlertFeed          ObservableCollection<BannerDetectionEventDto>
+                     좌측 목록. WebSocket 수신 시 ProcessAlertForFeed()로 insert/update
+
+  ActiveAlert        BannerDetectionEventDto?
+                     하단 상세 패널의 "현재 검토 중인 1건"
+                     set 시:
+                       - HasActiveAlert / HasNoActiveAlert 갱신
+                       - LoadPastViolationsForActiveAlert() → HistoryLog 채움
+                       - ActiveAlert.CctvId 와 일치하는 Channels 항목 → SelectedChannel 설정
+                       - MapQuery = SelectedChannel.Address → 지도 갱신
+
+  SelectedChannel    CctvChannel?
+                     스냅샷 라벨용 ChannelId 표시. VLM 화면에서 MP4 재생은 안 함
+
+  HasActiveAlert     ActiveAlert != null
+  HasNoActiveAlert   ActiveAlert == null
+
+  MapQuery           string — 지도 검색어
+
+  TodayDetectionCount / PendingCount / CompletedCount / EmergencyCount
+                     KPI 카드용 카운터
+
+  ApproveCommand / DismissCommand / SelectAlertCommand
+                     하단 버튼 & 목록 "검토"
+
+[정의돼 있으나 VLM XAML에 바인딩 없는 것]
+
+  HistoryLog         EnforcementHistoryDto 컬렉션 — ActiveAlert 바뀔 때 DB에서 로드하나 UI 미표시
+  ActiveAlert.VerdictColor / VerdictIcon / StatusCode / VerdictColorLegend
+                     DTO에 구현됨. VLM 화면 박스/뱃지에 미연결
+  ActiveAlert.Stage / StageText / BoundingBoxLabelText
+                     Tier 2/3 라벨 — VLM 화면 미사용
+
+
+■ 4. 데이터 모델 — BannerDetectionEventDto
+--------------------------------------------------------------------------------
+
+WebSocket JSON ↔ C# DTO 1:1 (PascalCase)
+
+  [식별]
+  Id, CctvId, LocationAddress, Timestamp, TimestampOffset
+
+  [Tier 1 — YOLO]
+  HasBanner, BoundingBox (X,Y,Width,Height), Confidence
+  FullImageBase64     — 전체 프레임 (VLM 스냅샷 배경)
+  YoloDetectionLabelText — "현수막 (Banner) - xx% | Tier 1: 탐지" (CCTV 박스 라벨용)
+
+  [Tier 2 — OCR]
+  OcrText, OcrConfidence
+
+  [Tier 3 — VLM]
+  IsVlmTriggered, VlmAnalysis, StatusCode
+  StatusCode 예: LEGAL_PUBLIC, LEGAL_COMMERCIAL, LEGAL_POLITICS,
+                ILLEGAL_COMMERCIAL, ILLEGAL_CONTENT, MANUAL_REVIEW, EXEMPT_ELECTION
+
+  [이미지]
+  CroppedImageBase64  — 현수막 크롭 (목록 썸네일, VLM 패널 소형 이미지)
+  CropImageUri        — http://localhost:8000/assets/... (백엔드 static)
+
+  [기타]
+  IsRepeatOffender, RepeatCount → 목록 긴급 스타일 (빨간 테두리)
+
+  [UI 헬퍼 — VLM에서 써야 할 것들]
+  VerdictColor        StatusCode → SolidColorBrush (합법=초록, 불법=빨강 등)
+  VerdictColorLegend  한글 범례 문자열
+  VerdictIcon         이모지+한글 판정 요약
+  AiReason            VlmAnalysis 우선, 없으면 기본 문구
+
+
+■ 5. 백엔드 → WPF 데이터 파이프라인 (현재)
+--------------------------------------------------------------------------------
+
+[시뮬레이터] backend/app/api/websocket_endpoints.py
+  5초 주기
+  채널별 MP4 첫 프레임 → temp jpg → AI 추론
+  채널당 channel_batch 1건 WebSocket 전송
+
+[메시지 형식] ChannelDetectionBatch
+  MessageType: "channel_batch"
+  CctvId, FrameWidth, FrameHeight (1920×1080)
+  Detections: BannerDetectionEvent[]  (현수막 1개당 1 이벤트)
+
+[AI 파이프라인] ai_inference_service.py (탐지 1건당)
+  1. YOLO → bbox
+  2. DB IoU 0.4 매칭 (캐시된 VLM 결과 재사용 가능)
+  3. VLM(Qwen2.5-VL) 대부분 실행
+  4. StatusCode / VlmAnalysis / OcrText 결정
+  5. FullImageBase64, CroppedImageBase64 base64 인코딩
+  6. BannerDetectionEvent 생성
+
+[WPF 수신] WebSocketService.cs
+  MessageType == "channel_batch" → OnChannelBatchReceived
+
+[MainViewModel.OnChannelBatchReceived]
+  1. channel.ApplyDetectionBatch(batch)  → CCTV용 CurrentAlerts (VLM 화면과 별개)
+  2. foreach detection → ProcessAlertForFeed(d, fromSameBatch:true) → AlertFeed
+  3. ActiveAlert = IsVlmTriggered 우선 else Detections[0]
+     ※ 배치마다 ActiveAlert가 덮어써짐. 사용자가 "검토"로 고른 항목도 다음 배치에 밀릴 수 있음
+
+[ProcessAlertForFeed 쓰로틀]
+  동일 CctvId 3초 이내 중복 insert 방지
+  fromSameBatch=true 이면 쓰로틀 무시 (같은 채널 다중 현수막 Feed 등록 가능)
+
+
+■ 6. CCTV 화면 vs VLM 화면 — 반드시 지켜야 할 분리
+--------------------------------------------------------------------------------
+
+  ┌─────────────────┬──────────────────────────┬────────────────────────────┐
+  │                 │ CCTV (CctvMonitoringView)│ VLM (RealTimeMonitoringView)│
+  ├─────────────────┼──────────────────────────┼────────────────────────────┤
+  │ 영상            │ MP4 LIVE 재생            │ 없음 — FullImageBase64 스냅샷│
+  │ 박스 개수       │ N개 (CurrentAlerts)      │ 1개 (ActiveAlert)          │
+  │ 박스 색         │ 고정 빨강 #FF4757        │ 고정 빨강 (YOLO 전용)      │
+  │ VLM 판정 색     │ 사용 금지                │ StatusCode/VerdictColor 사용│
+  │ 좌표 기준       │ OverlayFrame 1920×1080   │ FullImageBase64 해상도     │
+  │ 오버레이 모드   │ OverlayOnly=true         │ OverlayOnly=false (프레임+박스)│
+  │ 데이터 소스     │ CctvChannel.CurrentAlerts│ MainViewModel.ActiveAlert  │
+  └─────────────────┴──────────────────────────┴────────────────────────────┘
+
+다음 작업에서 CCTV 쪽 수정을 VLM에 끌어오거나,
+VLM VerdictColor를 CCTV 박스에 섞지 말 것 (이전 사용자 요구사항).
+
+
+■ 7. YoloBBoxOverlay — VLM 모드 동작
+--------------------------------------------------------------------------------
+
+VLM 스냅샷 패널 설정:
+  OverlayOnly = false (기본)
+  Alert = ActiveAlert (단일)
+  FrameSource = ActiveAlert.FullImageBase64
+  IsActive = HasActiveAlert
+
+RenderWithFrame() 경로:
+  1. FrameSource 또는 FullImageBase64 디코드 → 배경 Image (Opacity=FrameOpacity)
+  2. NativeCanvas 원본 해상도에 bbox 1개 (빨간 박스 + Tier1 라벨 + ObjectId)
+  3. Viewbox Stretch=Uniform 로 컨테이너에 맞춤
+
+※ MP4 프레임 기준 추론 후에는 FullImageBase64가 1920×1080 JPEG
+※ OverlayOnly=true 경로는 VLM에서 사용하지 않음
+
+
+■ 8. 이미지 로딩 경로
+--------------------------------------------------------------------------------
+
+[ImageLoaderConverter]
+  - data:image/...;base64,... 또는 raw base64 → BitmapImage
+  - 로컬 파일 경로 fallback
+  - 사용처: 목록 CroppedImageBase64, VLM 패널 CroppedImageBase64
+
+[YoloBBoxOverlay FrameSource]
+  - FullImageBase64 직접 디코드 (ImageDimensionHelper)
+  - 배경 프레임 + bbox 동시 렌더
+
+이미지 안 뜨는 경우 체크리스트:
+  1. WebSocket channel_batch 수신 여부 (로그: Channel batch: CCTV=...)
+  2. ActiveAlert null 여부 (HasNoActiveAlert 오버레이가 가리는지)
+  3. FullImageBase64 / CroppedImageBase64 빈 문자열 여부
+  4. 시뮬레이터 크래시 (Conv.bn 등) — 추론 자체 실패
+  5. JSON 역직렬화 실패 (WebSocket-Err Deserialization)
+
+
+■ 9. 사용자 액션 흐름 (현재 구현)
+--------------------------------------------------------------------------------
+
+[목록에서 검토]
+  "검토" 클릭 → SelectAlertCommand(parameter=해당 DTO)
+  → ActiveAlert = 선택 항목
+  → SelectedChannel / MapQuery 자동 갱신
+
+[합법 확인 / 불법 확정] — 둘 다 OnApproveActiveAlert()
+  - PDF 보고서 생성 (Reports 폴더)
+  - DB status "단속확정"
+  - HighlightChannelAlertState(cctvId, false) → CCTV 박스 제거
+  - AlertFeed.Remove(ActiveAlert)
+  - SelectNextPendingAlert() → Feed 첫 항목을 ActiveAlert로
+  - GC 트리거
+
+[재검토 요청] — OnDismissActiveAlert()
+  - DB "오탐기각"
+  - 위와 동일하게 Feed/CCTV 정리
+
+※ 합법/불법 버튼이 같은 Command → 다음 작업에서 반드시 분리 필요
+※ 승인 시 StatusCode/판정 결과를 DB에 구분 저장하는 로직 없음
+
+
+■ 10. 현재 알려진 문제 & 기술 부채 (다음 작업 전제)
+--------------------------------------------------------------------------------
+
+P0 — 데이터/표시
+  [ ] 배치 수신 시 ActiveAlert 자동 덮어쓰기 → 사용자 선택 유실
+  [ ] 합법/불법 버튼 동일 ApproveCommand
+  [ ] VLM 판정 색(StatusCode/VerdictColor) UI 미연결
+  [ ] HistoryLog 로드되나 화면에 없음
+
+P1 — UX 미완
+  [ ] 필터 탭 (전체/긴급/일반) 미구현
+  [ ] 위치 검색 TextBox 미구현
+  [ ] 지도/CCTV 스위치 미구현
+  [ ] KPI 일부 하드코딩 수치
+
+P2 — 아키텍처
+  [ ] RealTimeMonitoringView 전용 ViewModel 없음 → MainViewModel 비대화
+  [ ] AlertFeed 항목과 ActiveAlert가 같은 객체 참조 공유 (UpdateFrom 시 UI 꼬임 가능)
+  [ ] channel_batch만 수신 — 레거시 단건 OnWebSocketAlertReceived 경로는 사실상 미사용
+
+P3 — 백엔드 연동
+  [ ] VLM 로딩 30~60초 — WPF 시작 직후 WebSocket 빈 구간
+  [ ] 채널 순차 추론 — 4채널 완료까지 Feed가 순차 채워짐
+
+
+■ 11. 다음 작업 — 권장 구현 순서
+--------------------------------------------------------------------------------
+
+Phase 1: 데이터 안정화 (표시가 먼저)
+  1-1. channel_batch 수신 → AlertFeed 정상 채움 확인 (로그/테스트)
+  1-2. ActiveAlert 선택 정책 변경
+       - 자동: 최초 1회만 설정, 이후 사용자 선택 유지
+       - 또는: 새 배치가 와도 ActiveAlert가 Feed에 있으면 유지
+  1-3. FullImageBase64 / CroppedImageBase64 / VlmAnalysis 빈 값 방어 UI
+
+Phase 2: VLM 검증 UI 본연 기능
+  2-1. StatusCode → VerdictColor 뱃지/테두리 표시 (스냅샷 패널·헤더)
+  2-2. VlmAnalysis 포맷 정리 (백엔드 raw 출력 → 읽기 쉬운 섹션)
+  2-3. 합법 확인 / 불법 확정 Command 분리
+       - ApproveLegalCommand / ApproveIllegalCommand (또는 parameter)
+       - DB·PDF에 판정 구분 저장
+  2-4. DismissCommand 동작 명확화 (재검토 큐 vs 오탐)
+
+Phase 3: 목록·필터
+  3-1. AlertFeed CollectionView 필터 (긴급=IsRepeatOffender, 일반=그 외)
+  3-2. 위치/OCR 검색
+  3-3. 목록 선택 하이라이트 (현재 ActiveAlert와 목록 sync 표시 없음)
+
+Phase 4: 부가 패널 (선택)
+  4-1. HistoryLog UI (상습 위반 이력)
+  4-2. KPI 실데이터 연동
+  4-3. 지도 마커 / CCTV 스위치
+
+※ Phase 1~2 완료 후 사용자 데모 가능 수준
+※ CCTV 모니터링(YoloBBoxOverlay OverlayOnly, 다중 박스)은 이 Phase에서 건드리지 않음
+
+
+■ 12. 수정 시 건드릴 파일 맵
+--------------------------------------------------------------------------------
+
+[WPF — VLM 화면]
+  Views/RealTimeMonitoringView.xaml       레이아웃, 바인딩, VerdictColor 연결
+  Views/RealTimeMonitoringView.xaml.cs    지도, (필요 시) 스크롤/포커스
+  ViewModels/MainViewModel.cs             ActiveAlert 정책, Command 분리, Feed 필터
+  Models/BannerDetectionEventDto.cs       VLM 표시 헬퍼 추가/정리
+  Controls/YoloBBoxOverlay.xaml(.cs)      VLM 스냅샷 모드만 (OverlayOnly=false 유지)
+  Converters/                             판정색, VLM 텍스트 포맷 Converter (선택)
+  Services/PdfReportService.cs            합법/불법 PDF 구분
+  Services/DatabaseService.cs             판정 결과 저장 필드
+
+[WPF — 건드리면 안 되는 것 (CCTV)]
+  Views/CctvMonitoringView.xaml
+  Controls/CctvChannelControl.xaml
+  Models/CctvChannel.cs (CurrentAlerts, OverlayFrameWidth/Height)
+  CctvChannel.ApplyDetectionBatch
+
+[Backend — VLM 출력 품질]
+  app/services/ai_inference_service.py    VlmAnalysis 포맷, StatusCode 일관성
+  app/schemas/detection_schema.py       필드 추가 시 C# DTO 동기화
+  app/api/websocket_endpoints.py        배치 전송 (구조 유지)
+
+
+■ 13. 완료 기준 (Definition of Done) — VLM 검증 화면 MVP
+--------------------------------------------------------------------------------
+
+  [1] WebSocket 수신 후 좌측 목록에 탐지 건 표시 (썸네일+주소+OCR)
+  [2] "검토" 또는 자동 선택으로 하단 스냅샷에 FullImageBase64 + YOLO 박스 표시
+  [3] VLM 분석 텍스트 + 크롭 이미지 표시
+  [4] StatusCode에 따른 판정 색/라벨 표시 (초록/빨강/노랑 등)
+  [5] 합법 / 불법 버튼이 서로 다른 동작 + DB 반영
+  [6] 재검토(기각) 시 Feed·ActiveAlert·CCTV 박스 정리
+  [7] CCTV LIVE 화면 동작에 regression 없음
+
+================================================================================
+  끝 — 컴팩트 시 §0, §6, §10, §11, §13 만 남겨도 작업 착수 가능
+================================================================================

@@ -18,6 +18,6 @@ if not exist "%EXE%" (
 )
 
 echo BannerGuardSystem 실행 중...
-echo ^(WPF가 Python AI 백엔드를 자동으로 기동합니다^)
+echo ^(WPF가 Python AI 백엔드를 자동으로 기동/종료합니다^)
 start "" "%EXE%"
 endlocal

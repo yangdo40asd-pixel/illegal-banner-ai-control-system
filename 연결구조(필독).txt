@@ -1,0 +1,372 @@
+================================================================================
+  연결구조(필독) — BannerGuardSystem 전체 연결·GPU·서버 구조
+  작성 목적: 피그마/UI 수정·기능 추가 시 "이 줄만 건드리면 전체가 끊긴다" 방지
+  프로젝트 루트: D:\138.종합 민원 이미지 AI데이터
+  최종 갱신: 2026-06-25
+================================================================================
+
+■ 한 줄 요약
+  WPF(관제 화면)가 켜지면 → Python FastAPI 서버를 자동 기동 → WebSocket으로
+  AI 탐지 결과(JSON)를 받아 → 화면에 바인딩한다.
+  AI 연산(GPU)은 전부 Python 쪽에서만 일어난다. WPF는 영상 재생(LibVLC)만 담당.
+
+
+================================================================================
+1. 전체 구조도 (절대 헷갈리지 말 것)
+================================================================================
+
+  [사용자 PC]
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  BannerGuardSystem.exe  (WPF, C#, net9.0-windows)                        │
+  │  ┌──────────────┐   ┌─────────────────┐   ┌──────────────────────────┐  │
+  │  │ MainWindow   │   │ MainViewModel   │   │ LibVLC (CCTV 영상 재생)   │  │
+  │  │ (View/XAML)  │◄──│ (MVVM)          │   │ GPU: 영상 디코드 보조만   │  │
+  │  └──────────────┘   └────────┬────────┘   └──────────────────────────┘  │
+  │                              │                                            │
+  │         App.xaml.cs 시작 시   │                                            │
+  │         BackendManager.Start()│                                           │
+  │                              ▼                                            │
+  │                    python backend/app/main.py  (자식 프로세스)            │
+  │                    또는 ai_server.exe (배포 시)                           │
+  └──────────────────────────────┬──────────────────────────────────────────┘
+                                 │  WebSocket ws://localhost:8000/ws/alerts
+                                 │  (JSON 탐지 이벤트 push)
+                                 ▼
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  FastAPI 서버 (Python, 포트 8000)                                         │
+  │  backend/app/main.py                                                     │
+  │  ┌──────────────────┐    ┌────────────────────────────────────────────┐ │
+  │  │ websocket_       │───►│ AIInferenceService (GPU 연산 핵심)          │ │
+  │  │ endpoints.py     │    │  · YOLOv26s (best.pt) → CUDA/CPU           │ │
+  │  │ /ws/alerts       │    │  · Qwen2.5-VL-3B → CUDA 4bit (HuggingFace) │ │
+  │  └──────────────────┘    │  · SQLite DB (tracked_banners)             │ │
+  │                          └────────────────────────────────────────────┘ │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+2. 프로그램 켜지는 순서 (타임라인)
+================================================================================
+
+  [1] 사용자가 BannerGuardSystem.exe 실행 (또는 run.bat)
+
+  [2] App.OnStartup (BannerGuardSystem/App.xaml.cs)
+        ├─ BackendManager.Start()          ← Python AI 서버 기동 (가장 먼저!)
+        ├─ QuestPDF 라이선스
+        ├─ LibVLC.Core.Initialize()        ← CCTV용 (AI GPU와 별개)
+        ├─ new MainViewModel()
+        ├─ MainWindow.DataContext = VM
+        └─ mainWindow.Show()
+
+  [3] BackendManager.Start() (BannerGuardSystem/Services/BackendManager.cs)
+        ├─ 포트 8000 점유 프로세스 정리 (netstat + kill)
+        ├─ (우선) ai_server.exe 있으면 배포 모드로 실행
+        ├─ (없으면) backend/app/main.py 찾아서 python -u 로 실행
+        │     · exe 폴더에서 최대 10단계 상위로 올라가며 main.py 탐색
+        │     · WorkingDirectory = 프로젝트 루트 (D:\138.종합 민원 이미지 AI데이터)
+        │     · Conda PATH를 환경변수에 주입 (CUDA DLL 로드용)
+        ├─ Job Object 등록 (WPF 종료 시 Python도 같이 죽게)
+        └─ 로그 → exe옆 backend_manager.log
+
+  [4] Python main.py 기동
+        ├─ uvicorn 포트 8000
+        ├─ lifespan: AIInferenceService 싱글톤 로드 (YOLO + Qwen, 수 분 소요 가능)
+        └─ /ws/alerts WebSocket 대기
+
+  [5] MainViewModel 생성자
+        ├─ DatabaseService.Initialize()      ← WPF용 SQLite
+        ├─ WebSocketService.ConnectAsync("ws://localhost:8000/ws/alerts")
+        ├─ CCTV 채널 4개 로드 + LibVLC Play()
+        └─ 텔레메트리 타이머 시작
+
+  [6] WebSocket 연결 성공 시
+        ├─ 서버: run_real_ai_simulator() 백그라운드 태스크 시작
+        │     · 3초(첫) / 8초마다 Assets JPG 한 장씩 AI 분석
+        │     · 결과 JSON을 WebSocket으로 push
+        └─ WPF: OnAlertReceived → AlertFeed에 추가 → UI 자동 갱신
+
+  [7] App.OnExit
+        ├─ BackendManager.Stop()
+        └─ LibVLC Dispose()
+
+
+================================================================================
+3. 연결 포인트 3곳 (여기 깨지면 전체 끊김)
+================================================================================
+
+  ┌────────┬────────────────────────────────────┬─────────────────────────────┐
+  │ 번호   │ 연결                               │ 고정 값 / 파일              │
+  ├────────┼────────────────────────────────────┼─────────────────────────────┤
+  │ ①     │ WPF → Python 프로세스 기동         │ backend/app/main.py         │
+  │        │                                    │ 포트 8000                   │
+  ├────────┼────────────────────────────────────┼─────────────────────────────┤
+  │ ②     │ WPF ↔ 서버 실시간 통신             │ ws://localhost:8000/ws/alerts│
+  │        │                                    │ AppSettings.WsUrl           │
+  ├────────┼────────────────────────────────────┼─────────────────────────────┤
+  │ ③     │ Python → YOLO 가중치               │ D:\138.종합 민원 이미지 AI데이터\
+  │        │                                    │ yolo26s\runs\...\best.pt    │
+  └────────┴────────────────────────────────────┴─────────────────────────────┘
+
+  ※ ③번 경로가 하드코딩됨 (ai_inference_service.py, DatabaseService.cs 등)
+     폴더 위치 바꾸면 AI 전체 안 됨. clone 시에도 D:\138... 동일 경로 권장.
+
+
+================================================================================
+4. GPU / CUDA — 누가 뭘 쓰는지 (분리해서 이해)
+================================================================================
+
+  [WPF 쪽 — BannerGuardSystem]
+  · LibVLC + VideoLAN.LibVLC.Windows
+    - CCTV RTSP/파일 영상 재생
+    - UI에 "LibVLC DXVA2 가속" 표시 (하드웨어 디코드)
+    - ★ YOLO/Qwen AI 연산과 무관
+
+  [Python 쪽 — backend/app/services/ai_inference_service.py]
+  · torch.cuda.is_available() → True면 device="cuda"
+  · YOLO (ultralytics): self.yolo(img, device=self.device)
+  · Qwen2.5-VL-3B-Instruct:
+      - CUDA 있으면: 4bit 양자화 (BitsAndBytesConfig) + device_map="auto"
+      - CUDA 없으면: CPU float32 (매우 느림, 실사용 비권장)
+  · HuggingFace에서 Qwen 모델 최초 다운로드 (~6GB, 인터넷 필요)
+    - 캐시: 사용자 홈 .cache/huggingface/ (또는 florence2_cache 폴더 참고)
+
+  [VRAM 대략적 사용 — RTX 3080 10GB 기준 설계]
+  · YOLO best.pt: ~2GB 내외
+  · Qwen 4bit: ~3.5GB 내외
+  · 동시에 한 프로세스(Python 서버)에서만 GPU 점유
+
+  ★ EasyOCR 주의
+  · 코드 주석/로그에는 "YOLO+EasyOCR+Qwen"이라 적혀 있으나
+  · 현재 ai_inference_service.py 에서 EasyOCR 실제 로드/호출 없음
+  · OCR+판정은 Qwen VLM이 담당 (Tier 2 UI 라벨은 역사적 이름)
+
+
+================================================================================
+5. WebSocket 데이터 흐름 (JSON 계약)
+================================================================================
+
+  [서버 → WPF 한 메시지 = BannerDetectionEvent 1건]
+
+  Python (Pydantic): backend/app/schemas/detection_schema.py
+    BannerDetectionEvent 필드 (PascalCase):
+      Id, CctvId, LocationAddress, Timestamp, HasBanner,
+      BoundingBox { X, Y, Width, Height },
+      Confidence, OcrText, OcrConfidence,
+      IsVlmTriggered, VlmAnalysis,
+      IsRepeatOffender, RepeatCount,
+      CropImageUri, CroppedImageBase64, StatusCode
+
+  WPF (C#): BannerGuardSystem/Models/BannerDetectionEventDto.cs
+    · Newtonsoft.Json으로 역직렬화 (WebSocketService.cs)
+    · 필드명 PascalCase 일치 필요
+
+  [UI 표시 경로]
+    WebSocket 수신
+      → MainViewModel.OnWebSocketAlertReceived()
+      → AlertFeed.Insert(0, alertDto)
+      → ActiveAlert = alertDto
+      → XAML Binding (크롭 이미지, 3-Tier, 피드 목록)
+      → ImageLoaderConverter가 CroppedImageBase64 → BitmapImage
+
+  ★ Base64 이미지가 크므로 WebSocket 버퍼 64KB (WebSocketService.cs)
+
+
+================================================================================
+6. AI 추론 파이프라인 (서버 내부, 1장 이미지 기준)
+================================================================================
+
+  websocket_endpoints.run_real_ai_simulator()
+    → AIInferenceService.run_inference_as_event(img_path, cctv_id)
+      → _run_inference_raw()
+         [1] cv2.imread
+         [2] YOLO 탐지 (바운딩 박스)
+         [3] DB IoU 0.4 매칭 (tracked_banners, 같은 현수막 추적)
+         [4] Qwen VLM 이중 크롭 분석 (배경+확대)
+         [5] verdict/reason/status_code 산출
+         [6] 크롭 이미지 → base64 + /assets URL
+         [7] BannerDetectionEvent JSON 생성
+    → websocket.send_text(event.model_dump_json())
+
+  [현재 입력 이미지 소스 — 실 RTSP 아님]
+  · 시뮬레이터가 BannerGuardSystem/Assets/*.jpg 를 채널별로 돌려 씀
+  · WPF CCTV 화면(LibVLC)과 AI 분석 이미지는 별도 경로 (연동 미완)
+
+
+================================================================================
+7. DB — 두 군데 있지만 역할 다름
+================================================================================
+
+  [Python AI DB]  inference_test/banner_tracking.db
+    · db_service.py (backend)
+    · tracked_banners 테이블
+    · AI 추론 중 IoU 추적, VLM 결과 캐시, 상습위반 판단
+
+  [WPF UI DB]  같은 파일을 쓰려 시도함
+    · DatabaseService.cs
+    · 기본 경로: D:\138...\inference_test\banner_tracking.db
+    · 없으면 exe 옆 banner_tracking.db
+    · 단속 확정/기각 시 UpdateBannerStatus
+    · 상습 위반 이력 탭 (GetViolationHistory)
+
+  ★ WPF Approve/Dismiss 시 UpdateBannerStatus(alert.GetHashCode(), ...)
+    → ID가 AI DB id와 다를 수 있음 (알려진 주의점)
+
+
+================================================================================
+8. 폴더·파일 지도 (건드릴 때 참고)
+================================================================================
+
+  BannerGuardSystem/          ← WPF 클라이언트 (피그마 UI = 여기 XAML)
+    App.xaml.cs               ← 시작점, BackendManager 호출
+    MainWindow.xaml           ← 메인 관제 UI (대부분 Binding)
+    ViewModels/MainViewModel.cs ← 상태·Command·WebSocket 수신 처리
+    Services/
+      BackendManager.cs       ← ★ Python 서버 기동 (연결 핵심)
+      WebSocketService.cs     ← ★ ws:// 수신 (연결 핵심)
+      DatabaseService.cs      ← SQLite 이력
+      PdfReportService.cs     ← 단속 PDF
+      RtspVideoSource.cs      ← CCTV URL (LibVLC)
+    Controls/CctvChannelControl.xaml(.cs) ← 영상+YOLO 박스 오버레이
+    Models/
+      BannerDetectionEventDto.cs ← ★ JSON 수신 스키마 (필드명 주의)
+      AppSettings.cs          ← WsUrl = ws://localhost:8000/ws/alerts
+    Converters/ImageLoaderConverter.cs ← Base64→이미지
+
+  backend/                    ← Python AI 서버
+    app/main.py               ← FastAPI 진입, 포트 8000
+    app/api/websocket_endpoints.py ← ★ WebSocket + 시뮬레이터
+    app/services/ai_inference_service.py ← ★ GPU/YOLO/Qwen
+    app/services/db_service.py
+    app/schemas/detection_schema.py ← ★ JSON 송신 스키마
+    requirements.txt
+
+  yolo26s/runs/.../weights/best.pt  ← YOLO 모델 (Git 포함)
+
+  inference_test/             ← 프로토타입 (server.py, inference_engine.py)
+                               운영 경로는 backend/ 가 메인
+
+  연결구조(필독).txt          ← 이 문서
+
+
+================================================================================
+9. 로그 파일 위치 (연결 안 될 때 여기부터 본다)
+================================================================================
+
+  [WPF exe 옆]
+  · backend_manager.log
+    - BackendManager 전체 로그
+    - Python stdout/stderr ([AI-Server], [AI-Server-Err])
+    - WebSocket 연결/수신 로그
+
+  [Python 콘솔 → 위 로그로 리다이렉트]
+  · [서버] AI 모델 미리 로딩...
+  · [AI엔진] 가용 가속 디바이스: cuda / cpu
+  · [시뮬레이터] 프레임 분석 가동...
+  · [WS] 클라이언트 접속 허용...
+
+
+================================================================================
+10. 연결이 어려웠던 이유 (과거 트러블 포인트 정리)
+================================================================================
+
+  ① 프로젝트 경로 하드코딩
+     D:\138.종합 민원 이미지 AI데이터 가 여러 파일에 박혀 있음.
+     경로만 바꿔도 YOLO·DB·시뮬레이터 이미지 전부 실패.
+
+  ② WPF가 Python을 "찾는" 방식이 복잡
+     · publish/bin 깊은 폴더에서 실행해도 main.py를 상위 탐색
+     · Python은 conda banner_env → anaconda3 → PATH 순 탐색
+     · CUDA DLL 위해 Conda Library\bin 을 PATH에 수동 주입
+
+  ③ 서버 기동 ↔ WebSocket 연결 타이밍
+     · AI 모델 로딩(YOLO+Qwen)이 끝나기 전에 WPF가 ws 연결 시도 가능
+     · WebSocketService는 재연결(backoff) 있어서 대부분 복구됨
+     · 첫 연결 실패 시 1~30초 후 자동 재시도
+
+  ④ GPU/환경 의존
+     · torch CUDA 버전 ≠ NVIDIA 드라이버 → cpu 폴백 또는 크래시
+     · Qwen 첫 다운로드 중 네트워크 끊기면 서버 lifespan 실패
+
+  ⑤ WPF 영상(LibVLC) ≠ AI 분석 이미지
+     · 화면 CCTV는 RTSP/placeholder
+     · AI는 Assets JPG 시뮬레이터
+     · "영상에서 탐지된 박스"와 "서버 분석 결과"가 완전 동기는 아님
+
+  ⑥ JSON 필드 불일치 시
+     · Python schema ↔ C# DTO 필드명 달라지면 UI 빈 화면
+     · BoundingBox vs BBox 구조 주의
+
+
+================================================================================
+11. 피그마/UI 수정 시 — 안전 vs 위험
+================================================================================
+
+  [비교적 안전 — 연결 안 깨짐]
+  · MainWindow.xaml 레이아웃·색·폰트·간격
+  · Binding 경로만 유지: ActiveAlert.*, AlertFeed, Channels, ConnectionStatus 등
+  · DataTemplate 구조 변경 (필드명 Binding만 맞추면 됨)
+  · 버튼 추가 + Command="{Binding ApproveCommand}" 등
+
+  [주의 — 같이 봐야 함]
+  · BannerDetectionEventDto 필드 추가/이름 변경
+      → detection_schema.py 도 같이 수정
+  · AppSettings.WsUrl / 포트 변경
+      → main.py settings.PORT 도 맞출 것
+  · CctvChannelControl: MediaPlayer, YoloCanvas (영상+박스 연동)
+
+  [절대 함부로 건드리면 안 됨]
+  · BackendManager.cs (프로세스 기동 로직)
+  · WebSocketService.cs (수신·역직렬화)
+  · websocket_endpoints.py (/ws/alerts 경로)
+  · ai_inference_service.py __init__ (모델 경로, device)
+  · 하드코딩된 D:\138... 경로들 (경로 변경 시 전체 grep 후 일괄 수정)
+
+
+================================================================================
+12. 수동 테스트 방법 (연결 확인 체크리스트)
+================================================================================
+
+  □ 1. run.bat 또는 exe 실행
+  □ 2. backend_manager.log 에 [AI-Server] uvicorn running on :8000 확인
+  □ 3. 로그에 [AI엔진] 가용 가속 디바이스: cuda 확인 (GPU PC)
+  □ 4. 로그에 [WebSocket] Connected successfully 확인
+  □ 5. 3~10초 후 [WebSocket] Received alert event 확인
+  □ 6. UI 피드에 항목 추가 + 크롭 이미지 표시
+  □ 7. Space → PDF 생성 (Reports 폴더)
+
+  브라우저 보조 확인:
+  · http://localhost:8000/health  → {"status":"healthy"}
+  · http://localhost:8000/docs    → FastAPI Swagger
+
+
+================================================================================
+13. 향후 추가 예정 기능 (로드맵 — 아직 미연결)
+================================================================================
+
+  · ByteTrack 영상 추적
+  · 1시간 지속 탐지 후 알림
+  · 지도 연동
+  · 지역별 통계 / 과태료 자동 산정
+  · CCTV 4분할 그리드
+  · 카드 점멸 애니메이션
+
+  → 위 항목은 이 문서의 "현재 연결 구조"와 별개. 추가 시 이 txt에 섹션 추가할 것.
+
+
+================================================================================
+14. 빠른 참조 — 포트·URL·프레임워크
+================================================================================
+
+  HTTP API:     http://localhost:8000
+  WebSocket:    ws://localhost:8000/ws/alerts
+  Health:       http://localhost:8000/health
+  Static crop:  http://localhost:8000/assets/...
+
+  WPF Target:   net9.0-windows  (csproj 기준, 맞는 것)
+  Python:       conda banner_env 권장
+  AI 모델:      yolo26s/.../best.pt + Qwen2.5-VL-3B-Instruct (HF)
+
+================================================================================
+  끝 — 이 문서는 "연결 골격" 보존용. UI(피그마)는 바뀌어도
+  §3 연결 포인트 3곳 + §5 JSON 계약 + §4 GPU 경계만 지키면 시스템은 살아 있다.
+================================================================================
