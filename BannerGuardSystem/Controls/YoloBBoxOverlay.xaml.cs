@@ -222,26 +222,46 @@ public partial class YoloBBoxOverlay : UserControl
             return;
         }
 
-        if (Alert == null)
+        var frameAlerts = GetOverlayAlerts().ToList();
+        if (frameAlerts.Count == 0)
             return;
 
-        RenderWithFrame(Alert);
+        RenderWithFrame(frameAlerts);
     }
 
     private void RenderOverlayOnly(IReadOnlyList<BannerDetectionEventDto> alerts)
     {
         var (nativeW, nativeH) = ResolveNativeDimensions();
+        var containerW = ActualWidth;
+        var containerH = ActualHeight;
+        if (containerW <= 1 || containerH <= 1)
+        {
+            if (Parent is FrameworkElement parent && parent.ActualWidth > 1 && parent.ActualHeight > 1)
+            {
+                containerW = parent.ActualWidth;
+                containerH = parent.ActualHeight;
+            }
+            else
+            {
+                return;
+            }
+        }
+
+        OverlayCanvas.Width = containerW;
+        OverlayCanvas.Height = containerH;
+
         var anyDrawn = false;
 
-        foreach (var alert in alerts)
+        for (var i = 0; i < alerts.Count; i++)
         {
+            var alert = alerts[i];
             var mapped = YoloOverlayMath.MapToContainer(
-                alert.BoundingBox, nativeW, nativeH, ActualWidth, ActualHeight);
+                alert.BoundingBox, nativeW, nativeH, containerW, containerH);
 
             if (mapped.Width <= 0 || mapped.Height <= 0)
                 continue;
 
-            OverlayCanvas.Children.Add(CreateBBox(mapped.Left, mapped.Top, mapped.Width, mapped.Height, alert));
+            OverlayCanvas.Children.Add(CreateBBox(mapped.Left, mapped.Top, mapped.Width, mapped.Height, alert, i + 1));
             anyDrawn = true;
         }
 
@@ -249,13 +269,14 @@ public partial class YoloBBoxOverlay : UserControl
             OverlayCanvas.Visibility = Visibility.Visible;
     }
 
-    private void RenderWithFrame(BannerDetectionEventDto alert)
+    private void RenderWithFrame(IReadOnlyList<BannerDetectionEventDto> alerts)
     {
+        var primary = alerts[0];
         var frame = ImageDimensionHelper.LoadBitmap(
-            !string.IsNullOrEmpty(FrameSource) ? FrameSource : alert.FullImageBase64);
+            !string.IsNullOrEmpty(FrameSource) ? FrameSource : primary.FullImageBase64);
 
-        double nativeW = frame?.PixelWidth ?? YoloOverlayMath.DefaultImageWidth;
-        double nativeH = frame?.PixelHeight ?? YoloOverlayMath.DefaultImageHeight;
+        double nativeW = NativeFrameWidth > 0 ? NativeFrameWidth : frame?.PixelWidth ?? YoloOverlayMath.DefaultImageWidth;
+        double nativeH = NativeFrameHeight > 0 ? NativeFrameHeight : frame?.PixelHeight ?? YoloOverlayMath.DefaultImageHeight;
 
         NativeCanvas.Width = nativeW;
         NativeCanvas.Height = nativeH;
@@ -271,9 +292,14 @@ public partial class YoloBBoxOverlay : UserControl
             });
         }
 
-        var bbox = alert.BoundingBox;
-        if (YoloOverlayMath.IsValid(bbox))
-            NativeCanvas.Children.Add(CreateBBox(bbox.X, bbox.Y, bbox.Width, bbox.Height, alert));
+        for (var i = 0; i < alerts.Count; i++)
+        {
+            var alert = alerts[i];
+            var bbox = alert.BoundingBox;
+            if (YoloOverlayMath.IsValid(bbox))
+                NativeCanvas.Children.Add(CreateBBox(bbox.X, bbox.Y, bbox.Width, bbox.Height, alert, i + 1));
+        }
+
         ScaleBox.Visibility = Visibility.Visible;
     }
 
@@ -295,7 +321,7 @@ public partial class YoloBBoxOverlay : UserControl
         return (YoloOverlayMath.DefaultImageWidth, YoloOverlayMath.DefaultImageHeight);
     }
 
-    private FrameworkElement CreateBBox(double left, double top, double width, double height, BannerDetectionEventDto alert)
+    private FrameworkElement CreateBBox(double left, double top, double width, double height, BannerDetectionEventDto alert, int detectionIndex = 1)
     {
         bool isDetailPanel = !OverlayOnly;
         double borderThickness = isDetailPanel ? 4 : 2;
@@ -344,7 +370,7 @@ public partial class YoloBBoxOverlay : UserControl
             {
                 Text = isDetailPanel
                     ? $"YOLO 탐지 {alert.YoloConfidenceText}"
-                    : alert.YoloDetectionLabelText,
+                    : alert.CctvOverlayTopLabel(detectionIndex),
                 Foreground = isDetailPanel ? boxBrush : Brushes.White,
                 FontSize = topFontSize,
                 FontWeight = FontWeights.Bold
@@ -385,7 +411,7 @@ public partial class YoloBBoxOverlay : UserControl
             {
                 Text = isDetailPanel
                     ? $"ID {alert.ObjectIdText} · {alert.StageText}"
-                    : $"[ID: {alert.ObjectIdText}]",
+                    : alert.CctvOverlayIdLabel(detectionIndex),
                 Foreground = Brushes.White,
                 FontSize = bottomFontSize,
                 FontWeight = FontWeights.Bold

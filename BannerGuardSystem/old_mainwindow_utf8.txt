@@ -1,0 +1,211 @@
+﻿<Window x:Class="BannerGuardSystem.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:controls="clr-namespace:BannerGuardSystem.Controls"
+        xmlns:viewmodels="clr-namespace:BannerGuardSystem.ViewModels"
+        xmlns:models="clr-namespace:BannerGuardSystem.Models"
+        xmlns:md="http://materialdesigninxaml.net/winfx/xaml/themes"
+        mc:Ignorable="d"
+        Title="BannerGuardSystem - 吏?ν삎 遺덈쾿 ?꾩닔留??듯빀 愿???쒖뒪?? 
+        Height="900" Width="1600"
+        Background="#141416"
+        WindowStartupLocation="CenterScreen"
+        KeyDown="Window_KeyDown">
+
+    <Window.Resources>
+        <!-- Style for Channel Selector RadioButtons -->
+        <Style x:Key="ChannelTabButtonStyle" TargetType="RadioButton">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Border" 
+                                Background="#1C1C1E" 
+                                BorderBrush="#2C2C2E" 
+                                BorderThickness="1" 
+                                CornerRadius="4" 
+                                Padding="16,8" 
+                                Margin="0,0,8,0"
+                                Cursor="Hand">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <Ellipse x:Name="Indicator" Width="8" Height="8" Fill="#8E8E93" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                <ContentPresenter VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="#252529"/>
+                                <Setter TargetName="Border" Property="BorderBrush" Value="#34C759"/>
+                                <Setter TargetName="Indicator" Property="Fill" Value="#34C759"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Border" Property="BorderBrush" Value="#8E8E93"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Foreground" Value="#AEAEB2"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <!-- Sidebar -->
+            <ColumnDefinition Width="250"/>
+            <!-- Main Content Area -->
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- ========================================== -->
+        <!-- LEFT SIDEBAR -->
+        <!-- ========================================== -->
+        <Border Grid.Column="0" Background="#2E3A4B" BorderBrush="#1C2735" BorderThickness="0,0,1,0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <!-- Header with Logo -->
+                    <RowDefinition Height="120"/>
+                    <!-- Menu Items -->
+                    <RowDefinition Height="*"/>
+                    <!-- Footer Info -->
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <StackPanel Grid.Row="0" VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <md:PackIcon Kind="BankOutline" Width="36" Height="36" Foreground="#FFCC00" HorizontalAlignment="Center" Margin="0,0,0,10"/>
+                    <TextBlock Text="?듯빀 愿???쒖뒪?? Foreground="#A0AAB5" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                </StackPanel>
+
+                <!-- Navigation Menu -->
+                <StackPanel Grid.Row="1" Margin="0,20,0,0">
+                    <StackPanel.Resources>
+                        <Style TargetType="RadioButton">
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="RadioButton">
+                                        <Border x:Name="MenuBorder" Background="Transparent" Padding="20,15" Cursor="Hand">
+                                            <StackPanel Orientation="Horizontal">
+                                                <md:PackIcon x:Name="Icon" Kind="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" Width="20" Height="20" Foreground="#A0AAB5" VerticalAlignment="Center"/>
+                                                <ContentPresenter Margin="15,0,0,0" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsChecked" Value="True">
+                                                <Setter TargetName="MenuBorder" Property="Background" Value="#1E2A38"/>
+                                                <Setter TargetName="MenuBorder" Property="BorderBrush" Value="#00C4B5"/>
+                                                <Setter TargetName="MenuBorder" Property="BorderThickness" Value="4,0,0,0"/>
+                                                <Setter TargetName="Icon" Property="Foreground" Value="#00C4B5"/>
+                                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                                            </Trigger>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="MenuBorder" Property="Background" Value="#38465A"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                            <Setter Property="Foreground" Value="#A0AAB5"/>
+                            <Setter Property="FontSize" Value="15"/>
+                            <Setter Property="FontWeight" Value="SemiBold"/>
+                        </Style>
+                    </StackPanel.Resources>
+
+                    <RadioButton Content="CCTV 紐⑤땲?곕쭅" Tag="Cctv" GroupName="SidebarMenu" Command="{Binding NavigateCommand}" CommandParameter="CctvMonitoring"/>
+                    <RadioButton Content="VLM 寃利? Tag="MonitorDashboard" IsChecked="True" GroupName="SidebarMenu" Command="{Binding NavigateCommand}" CommandParameter="RealTimeMonitoring"/>
+                    <RadioButton Content="?⑥냽 泥섎━ ?꾪솴" Tag="ClipboardTextOutline" GroupName="SidebarMenu" Command="{Binding NavigateCommand}" CommandParameter="EnforcementList"/>
+                    <RadioButton Content="?듦퀎/由ы룷?? Tag="ChartBar" GroupName="SidebarMenu" Command="{Binding NavigateCommand}" CommandParameter="Statistics"/>
+                    <RadioButton Content="?곗씠??愿由? Tag="Database" GroupName="SidebarMenu" Command="{Binding NavigateCommand}" CommandParameter="Settings"/>
+                </StackPanel>
+
+                <!-- Footer Status -->
+                <StackPanel Grid.Row="2" Margin="20" VerticalAlignment="Bottom">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <Ellipse Width="8" Height="8" Fill="#22C55E" VerticalAlignment="Center"/>
+                        <TextBlock Text="?쒖뒪???뺤긽" Foreground="#22C55E" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <TextBlock Text="CCTV: 24媛??곌껐 以? Foreground="#A0AAB5" FontSize="11"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ========================================== -->
+        <!-- RIGHT CONTENT AREA -->
+        <!-- ========================================== -->
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="50"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- [援ъ뿭 D] ?곷떒 ?곹깭 ?쒖떆以?(Top Status Bar) -->
+            <Border Grid.Row="0" Background="#16161A" BorderBrush="#2C2C2E" BorderThickness="0,0,0,1" Padding="12,4">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Left Title & Menu Icon -->
+                    <StackPanel Orientation="Horizontal" Grid.Column="0" VerticalAlignment="Center">
+                        <md:PackIcon Kind="ShieldAlertOutline" Foreground="#34C759" Width="20" Height="20" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                        <TextBlock Text="遺덈쾿?꾩닔留?AI ?듯빀愿???쒖뒪?? Foreground="#FFFFFF" FontWeight="Bold" FontSize="16" VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- Center Telemetry Indicators -->
+                    <StackPanel Orientation="Horizontal" Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <TextBlock Text="CPU: " Foreground="#8E8E93" FontSize="11" VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding CpuUsageText}" Foreground="#FFFFFF" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" FontFamily="Consolas"/>
+                        <TextBlock Text=" | RAM: " Foreground="#8E8E93" FontSize="11" VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding RamUsageText}" Foreground="#FFFFFF" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" FontFamily="Consolas"/>
+                        <TextBlock Text=" | GPU: " Foreground="#8E8E93" FontSize="11" VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding GpuUsageText}" Foreground="#FFFFFF" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" FontFamily="Consolas"/>
+                        <TextBlock Text=" | AI ?곹깭: " Foreground="#8E8E93" FontSize="11" VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding AiStatusText}" Foreground="#FFCC00" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                        <TextBlock Text=" | " Foreground="#8E8E93" FontSize="11" VerticalAlignment="Center"/>
+                        <ToggleButton x:Name="AutomationToggle" IsChecked="{Binding IsAutomationEnabled}" Foreground="White" BorderThickness="0" Background="Transparent" Cursor="Hand" VerticalAlignment="Center">
+                            <ToggleButton.Style>
+                                <Style TargetType="ToggleButton">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="ToggleButton">
+                                                <Border Background="{TemplateBinding Background}" CornerRadius="4" Padding="4,2">
+                                                    <TextBlock x:Name="ToggleText" Text="?먮룞??OFF" FontSize="11" FontWeight="Bold"/>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsChecked" Value="True">
+                                                        <Setter TargetName="ToggleText" Property="Text" Value="?먮룞??ON"/>
+                                                        <Setter TargetName="ToggleText" Property="Foreground" Value="#22C55E"/>
+                                                    </Trigger>
+                                                    <Trigger Property="IsChecked" Value="False">
+                                                        <Setter TargetName="ToggleText" Property="Foreground" Value="#EF4444"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </ToggleButton.Style>
+                        </ToggleButton>
+                    </StackPanel>
+
+                    <!-- Right Top Status -->
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding CurrentTimeText}" Foreground="#FFFFFF" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- ========================================== -->
+            <!-- DYNAMIC ROUTED VIEW (RealTimeMonitoringView) -->
+            <!-- ========================================== -->
+            <ContentControl Grid.Row="1" Content="{Binding CurrentView}" />
+
+
+        </Grid>
+    </Grid>
+</Window>

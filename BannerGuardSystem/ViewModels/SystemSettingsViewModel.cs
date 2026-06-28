@@ -1,5 +1,7 @@
+using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
@@ -12,19 +14,16 @@ namespace BannerGuardSystem.ViewModels;
 public class SystemSettingsViewModel : BaseViewModel
 {
     private readonly ISettingsRepository _repository;
+    private readonly IDialogService _dialog;
     private SystemSettingsRoot _working = SystemSettingsDefaults.Create();
     private SystemSettingsRoot _snapshot = SystemSettingsDefaults.Create();
     private bool _showSaveToast;
+    private DataManagementPageTab _selectedPageTab = DataManagementPageTab.Data;
 
-    public SystemSettingsViewModel(MainViewModel? mainVm = null)
-        : this(new JsonSettingsRepository(), mainVm)
-    {
-    }
-
-    public SystemSettingsViewModel(ISettingsRepository repository, MainViewModel? mainVm = null)
+    public SystemSettingsViewModel(ISettingsRepository repository, IDialogService dialog)
     {
         _repository = repository;
-        MainVm = mainVm;
+        _dialog = dialog;
 
         SaveCommand = new SimpleCommand(Save);
         CancelCommand = new SimpleCommand(CancelChanges);
@@ -33,11 +32,56 @@ public class SystemSettingsViewModel : BaseViewModel
         PurgeDataCommand = new SimpleCommand(PurgeData);
         ResetAllDataCommand = new SimpleCommand(ResetAllData);
         ResetSettingsOnlyCommand = new SimpleCommand(ResetSettingsOnly);
+        SelectDataTabCommand = new RelayCommand(_ => SelectedPageTab = DataManagementPageTab.Data);
+        SelectModelTabCommand = new RelayCommand(_ => SelectedPageTab = DataManagementPageTab.Model);
 
         LoadFromRepository();
     }
 
-    public MainViewModel? MainVm { get; }
+    public DataManagementPageTab SelectedPageTab
+    {
+        get => _selectedPageTab;
+        set
+        {
+            if (!SetProperty(ref _selectedPageTab, value))
+                return;
+            OnPropertyChanged(nameof(IsDataPageSelected));
+            OnPropertyChanged(nameof(IsModelPageSelected));
+        }
+    }
+
+    public bool IsDataPageSelected => SelectedPageTab == DataManagementPageTab.Data;
+    public bool IsModelPageSelected => SelectedPageTab == DataManagementPageTab.Model;
+
+    public IReadOnlyList<VlmModelOption> VlmModelOptions => VlmModelCatalog.Available;
+
+    public string SelectedVlmModelDisplayName
+    {
+        get => _working.DataManagement.VlmModelDisplayName;
+        set
+        {
+            if (_working.DataManagement.VlmModelDisplayName == value)
+                return;
+
+            _working.DataManagement.VlmModelDisplayName = value;
+            var match = VlmModelCatalog.Available.FirstOrDefault(m => m.DisplayName == value);
+            if (match != null)
+                _working.DataManagement.VlmModelId = match.ModelId;
+
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(SelectedVlmModelDescription));
+            OnPropertyChanged(nameof(SelectedVlmModelIdText));
+        }
+    }
+
+    public string SelectedVlmModelDescription =>
+        VlmModelCatalog.Available.FirstOrDefault(m => m.DisplayName == SelectedVlmModelDisplayName)?.Description
+        ?? string.Empty;
+
+    public string SelectedVlmModelIdText => _working.DataManagement.VlmModelId;
+
+    public ICommand SelectDataTabCommand { get; }
+    public ICommand SelectModelTabCommand { get; }
 
     public bool ShowSaveToast
     {
@@ -126,7 +170,7 @@ public class SystemSettingsViewModel : BaseViewModel
         _repository.Save(_working);
         _snapshot = Clone(_working);
         ShowToast();
-        MessageBox.Show("데이터 관리 설정이 저장되었습니다.", "저장", MessageBoxButton.OK, MessageBoxImage.Information);
+        _dialog.ShowInfo("데이터 관리 설정이 저장되었습니다.", "저장");
     }
 
     private void CancelChanges()
@@ -137,8 +181,7 @@ public class SystemSettingsViewModel : BaseViewModel
 
     private void ResetDataSettings()
     {
-        if (MessageBox.Show("데이터 관리 설정을 기본값으로 되돌리시겠습니까?", "초기화",
-                MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+        if (!_dialog.Confirm("데이터 관리 설정을 기본값으로 되돌리시겠습니까?", "초기화"))
             return;
 
         _working = _repository.ResetTab(SettingsTab.Data);
@@ -164,34 +207,30 @@ public class SystemSettingsViewModel : BaseViewModel
             using var archive = ZipFile.Open(zip, ZipArchiveMode.Create);
             var db = SqliteDbPath.ResolveBannerTrackingDb();
             if (File.Exists(db)) archive.CreateEntryFromFile(db, "banner_tracking.db");
-            MessageBox.Show($"백업 완료:\n{zip}", "수동 백업", MessageBoxButton.OK, MessageBoxImage.Information);
+            _dialog.ShowInfo($"백업 완료:\n{zip}", "수동 백업");
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"백업 실패: {ex.Message}", "오류", MessageBoxButton.OK, MessageBoxImage.Error);
+            _dialog.ShowError($"백업 실패: {ex.Message}", "오류");
         }
     }
 
     private void PurgeData()
     {
-        if (MessageBox.Show("보관 기간 경과 데이터를 삭제하시겠습니까?", "데이터 정리",
-                MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
-        MessageBox.Show("데이터 정리가 완료되었습니다. (데모)", "정리", MessageBoxButton.OK, MessageBoxImage.Information);
+        if (!_dialog.ConfirmWarning("보관 기간 경과 데이터를 삭제하시겠습니까?", "데이터 정리")) return;
+        _dialog.ShowInfo("데이터 정리가 완료되었습니다. (데모)", "정리");
     }
 
     private void ResetAllData()
     {
-        if (MessageBox.Show("전체 데이터를 초기화합니다. 계속하시겠습니까?", "1차 확인",
-                MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
-        if (MessageBox.Show("이 작업은 되돌릴 수 없습니다. 정말 초기화하시겠습니까?", "2차 확인",
-                MessageBoxButton.YesNo, MessageBoxImage.Stop) != MessageBoxResult.Yes) return;
-        MessageBox.Show("전체 데이터 초기화 완료 (데모)", "초기화", MessageBoxButton.OK, MessageBoxImage.Information);
+        if (!_dialog.ConfirmWarning("전체 데이터를 초기화합니다. 계속하시겠습니까?", "1차 확인")) return;
+        if (!_dialog.ConfirmWarning("이 작업은 되돌릴 수 없습니다. 정말 초기화하시겠습니까?", "2차 확인")) return;
+        _dialog.ShowInfo("전체 데이터 초기화 완료 (데모)", "초기화");
     }
 
     private void ResetSettingsOnly()
     {
-        if (MessageBox.Show("설정만 기본값으로 초기화하시겠습니까?", "설정 초기화",
-                MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        if (!_dialog.Confirm("설정만 기본값으로 초기화하시겠습니까?", "설정 초기화")) return;
         _working = _repository.Reset();
         _snapshot = Clone(_working);
         NotifyDataProperties();
@@ -210,5 +249,8 @@ public class SystemSettingsViewModel : BaseViewModel
         OnPropertyChanged(nameof(ReportRetention));
         OnPropertyChanged(nameof(RecordingRetention));
         OnPropertyChanged(nameof(ExportBeforeDelete));
+        OnPropertyChanged(nameof(SelectedVlmModelDisplayName));
+        OnPropertyChanged(nameof(SelectedVlmModelDescription));
+        OnPropertyChanged(nameof(SelectedVlmModelIdText));
     }
 }

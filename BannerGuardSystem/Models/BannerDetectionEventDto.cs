@@ -53,7 +53,7 @@ public class BannerDetectionEventDto : INotifyPropertyChanged
     public BBox BoundingBox { get => _boundingBox; set { _boundingBox = value; OnPropertyChanged(); OnPropertyChanged(nameof(YoloCoordsText)); } }
     
     private double _confidence;
-    public double Confidence { get => _confidence; set { if (_confidence != value) { _confidence = value; OnPropertyChanged(); } } }
+    public double Confidence { get => _confidence; set { if (_confidence != value) { _confidence = value; OnPropertyChanged(); OnPropertyChanged(nameof(ConfidenceScore)); } } }
 
     // Tier 2 (OCR)
     private string _ocrText = string.Empty;
@@ -136,13 +136,15 @@ public class BannerDetectionEventDto : INotifyPropertyChanged
     // UI Helpers matching MainWindow.xaml bindings to resolve binding errors
     public string CctvName => CctvId switch
     {
-        "CCTV_01" => "CCTV_01 송도동",
-        "CCTV_02" => "CCTV_02 구월동",
-        "CCTV_03" => "CCTV_03 부평동",
-        "CCTV_04" => "CCTV_04 주안동",
+        "CCTV_01" => "CCTV_01 삼산동",
+        "CCTV_02" => "CCTV_02 삼산동",
+        "CCTV_03" => "CCTV_03 구월동",
+        "CCTV_04" => "CCTV_04 구월동",
         _ when CctvId.StartsWith("VLM_") => $"VLM {SourceImage}",
         _ => $"{CctvId} 채널"
     };
+
+    public double ConfidenceScore => Confidence;
 
     public string DetectedAtText => Timestamp.ToString("HH:mm:ss");
 
@@ -166,7 +168,7 @@ public class BannerDetectionEventDto : INotifyPropertyChanged
             { 
                 _statusCode = value; 
                 OnPropertyChanged(); 
-                OnPropertyChanged(nameof(VerdictColor)); 
+                OnPropertyChanged(nameof(VerdictColorKey)); 
                 OnPropertyChanged(nameof(VerdictIcon));
                 OnPropertyChanged(nameof(IsEmergency));
                 OnPropertyChanged(nameof(PriorityLabel));
@@ -180,23 +182,24 @@ public class BannerDetectionEventDto : INotifyPropertyChanged
     public string YoloDetectionLabelText =>
         $"현수막 (Banner) - {YoloConfidenceText} | Tier 1: 탐지 (Detected)";
 
+    /// <summary>CCTV LIVE 오버레이 상단 라벨 (제출용 포맷)</summary>
+    public string CctvOverlayTopLabel(int index) =>
+        $"현수막 (Banner) - {YoloConfidenceText} | Tier 1: 탐지 {index}";
+
+    /// <summary>CCTV LIVE 오버레이 하단 ID 라벨 (제출용 포맷)</summary>
+    public string CctvOverlayIdLabel(int index) => $"[ID: B.{index}]";
+
     /// <summary>VLM 검증 화면 뱃지용 — CCTV 박스에는 미사용</summary>
-    public System.Windows.Media.SolidColorBrush VerdictColor =>
+    public string VerdictColorKey =>
         StatusCode switch
         {
-            "LEGAL_PUBLIC" or "LEGAL_COMMERCIAL" or "EXEMPT_ELECTION"
-                => new(System.Windows.Media.Color.FromRgb(0x2E, 0xD5, 0x73)),
-            "LEGAL_POLITICS"
-                => new(System.Windows.Media.Color.FromRgb(0x2E, 0x86, 0xDE)),
-            "PENDING_VLM"
-                => new(System.Windows.Media.Color.FromRgb(0x60, 0xA5, 0xFA)),
-            "MANUAL_REVIEW"
-                => new(System.Windows.Media.Color.FromRgb(0xF5, 0x9E, 0x0B)),
-            "ILLEGAL_CONTENT"
-                => new(System.Windows.Media.Color.FromRgb(0xDC, 0x26, 0x26)),
-            "ILLEGAL_COMMERCIAL"
-                => new(System.Windows.Media.Color.FromRgb(0xFF, 0x47, 0x57)),
-            _ => new(System.Windows.Media.Color.FromRgb(0x94, 0xA3, 0xB8))
+            "LEGAL_PUBLIC" or "LEGAL_COMMERCIAL" or "EXEMPT_ELECTION" => "#2ED573",
+            "LEGAL_POLITICS" => "#2E86DE",
+            "PENDING_VLM" => "#60A5FA",
+            "MANUAL_REVIEW" => "#F59E0B",
+            "ILLEGAL_CONTENT" => "#DC2626",
+            "ILLEGAL_COMMERCIAL" => "#FF4757",
+            _ => "#94A3B8"
         };
 
     public string VerdictColorLegend => StatusCode switch

@@ -6,12 +6,16 @@
              mc:Ignorable="d"
              IsHitTestVisible="False"
              Background="Transparent">
-    <Grid>
+    <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
         <!-- 스냅샷/VLM 화면: 원본 프레임 + Viewbox 좌표계 -->
         <Viewbox x:Name="ScaleBox" Stretch="Uniform" Visibility="Collapsed">
             <Canvas x:Name="NativeCanvas" Background="Transparent"/>
         </Viewbox>
         <!-- CCTV: MP4 위 투명 오버레이 (Uniform 좌표 매핑) -->
-        <Canvas x:Name="OverlayCanvas" Background="Transparent" Visibility="Collapsed"/>
+        <Canvas x:Name="OverlayCanvas"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch"
+                Background="Transparent"
+                Visibility="Collapsed"/>
     </Grid>
 </UserControl>

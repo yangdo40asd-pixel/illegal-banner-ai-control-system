@@ -1,5 +1,8 @@
 using System.Windows;
 using LibVLCSharp.Shared;
+using Microsoft.Extensions.DependencyInjection;
+using BannerGuardSystem.ViewModels;
+
 
 namespace BannerGuardSystem;
 
@@ -27,14 +30,21 @@ public partial class App : Application
         
         // Initialize LibVLC native libraries
         Core.Initialize();
-        LibVLC = new LibVLC("--no-osd", "--rtsp-tcp");
+        LibVLC = new LibVLC("--no-osd", "--rtsp-tcp", "-vvv"); // Enable verbose logging
+        LibVLC.Log += (s, ev) => Services.BackendManager.Log($"[LibVLC] {ev.Level}: {ev.Message}");
 
-        // Create dependency instances
-        var mainViewModel = new ViewModels.MainViewModel();
+        // Create DI container and resolve ShellViewModel
+        var serviceProvider = AppBootstrapper.Build();
 
-        // Instantiate Window and set DataContext
+        var db = serviceProvider.GetRequiredService<BannerGuardSystem.Services.DatabaseService>();
+        db.Initialize();
+
+        var ws = serviceProvider.GetRequiredService<BannerGuardSystem.Services.WebSocketService>();
+        _ = ws.ConnectAsync(new BannerGuardSystem.Models.AppSettings().WsUrl);
+
+        var shellViewModel = serviceProvider.GetService<ShellViewModel>();
         var mainWindow = new MainWindow();
-        mainWindow.DataContext = mainViewModel;
+        mainWindow.DataContext = shellViewModel;
         mainWindow.Show();
     }
 

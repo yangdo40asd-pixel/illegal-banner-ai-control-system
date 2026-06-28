@@ -22,6 +22,12 @@ public abstract class BaseViewModel : INotifyPropertyChanged
         return true;
     }
 
+    // Alias for compatibility with existing ViewModels that use SetProperty
+    protected bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+    {
+        return SetField(ref field, value, propertyName);
+    }
+
     protected static void RunOnUi(Action action)
     {
         if (Application.Current?.Dispatcher?.CheckAccess() == true)

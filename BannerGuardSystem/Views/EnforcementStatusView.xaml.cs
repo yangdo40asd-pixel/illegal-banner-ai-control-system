@@ -7,9 +7,10 @@ namespace BannerGuardSystem.Views;
 
 public partial class EnforcementStatusView : UserControl
 {
-    public EnforcementStatusView()
+    public EnforcementStatusView(EnforcementStatusViewModel viewModel)
     {
         InitializeComponent();
+        DataContext = viewModel;
         Loaded += OnLoaded;
         DataContextChanged += OnDataContextChanged;
     }
@@ -34,13 +35,16 @@ public partial class EnforcementStatusView : UserControl
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
-        try
+        if (DataContext is EnforcementStatusViewModel vm)
         {
-            await MapWebView.EnsureCoreWebView2Async(null);
-            if (DataContext is EnforcementStatusViewModel vm)
+            vm.Refresh();
+            try
+            {
+                await MapWebView.EnsureCoreWebView2Async(null);
                 UpdateMap(vm.MapQuery);
+            }
+            catch { }
         }
-        catch { }
     }
 
     private async void UpdateMap(string? query)

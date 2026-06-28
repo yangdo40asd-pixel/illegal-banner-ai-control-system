@@ -20,7 +20,34 @@ public enum ChannelStatus
 public class CctvChannel : INotifyPropertyChanged, IDisposable
 {
     public string ChannelId { get; set; } = string.Empty;
-    public string Name { get; set; } = string.Empty;
+
+    private string _name = string.Empty;
+    public string Name
+    {
+        get => _name;
+        set
+        {
+            if (_name != value)
+            {
+                _name = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    private string _zoneLabel = "A";
+    public string ZoneLabel
+    {
+        get => _zoneLabel;
+        set
+        {
+            if (_zoneLabel != value)
+            {
+                _zoneLabel = value;
+                OnPropertyChanged();
+            }
+        }
+    }
     public string Gu { get; set; } = string.Empty;
     public string Dong { get; set; } = string.Empty;
     public string Address { get; set; } = string.Empty;
@@ -28,6 +55,9 @@ public class CctvChannel : INotifyPropertyChanged, IDisposable
     public string DefaultImagePath { get; set; } = string.Empty;
 
     public IVideoSource VideoSource { get; set; } = new LocalFileVideoSource(string.Empty);
+
+    /// <summary>VLC 재생 위치(ms) — LIVE YOLO 프레임 동기화용.</summary>
+    public long PlaybackPositionMs { get; set; }
 
     public ObservableCollection<BannerDetectionEventDto> CurrentAlerts { get; } = new();
 
@@ -110,8 +140,15 @@ public class CctvChannel : INotifyPropertyChanged, IDisposable
 
     public void ApplyDetectionBatch(ChannelDetectionBatchDto batch)
     {
+        var valid = batch.Detections
+            .Where(d => d.HasBanner && d.BoundingBox.Width > 0 && d.BoundingBox.Height > 0)
+            .ToList();
+
+        if (valid.Count == 0)
+            return;
+
         CurrentAlerts.Clear();
-        foreach (var detection in batch.Detections)
+        foreach (var detection in valid)
             CurrentAlerts.Add(detection);
 
         OverlayFrameWidth = batch.FrameWidth > 0 ? batch.FrameWidth : 1920;
@@ -120,7 +157,12 @@ public class CctvChannel : INotifyPropertyChanged, IDisposable
 
         Status = CurrentAlerts.Count > 0 ? ChannelStatus.Alerting : ChannelStatus.Online;
         OnPropertyChanged(nameof(CurrentAlerts));
+        OnPropertyChanged(nameof(CurrentAlert));
+        OnPropertyChanged(nameof(HasDetections));
         OnPropertyChanged(nameof(IsAlerting));
+
+        Services.BackendManager.Log(
+            $"[CctvChannel] {ChannelId} batch applied: alerts={CurrentAlerts.Count}, frame={OverlayFrameWidth}x{OverlayFrameHeight}");
     }
 
     public void ClearDetections()
@@ -128,6 +170,7 @@ public class CctvChannel : INotifyPropertyChanged, IDisposable
         CurrentAlerts.Clear();
         CurrentAlert = null;
         Status = ChannelStatus.Online;
+        OnPropertyChanged(nameof(HasDetections));
     }
 
     public Uri? VideoFileUri
@@ -168,15 +211,17 @@ public class CctvChannel : INotifyPropertyChanged, IDisposable
         _ => "⚫"
     };
 
+    public bool HasDetections => CurrentAlerts.Count > 0;
+
     public bool IsAlerting => Status == ChannelStatus.Alerting;
 
     public string StatusText => Status switch
     {
-        ChannelStatus.Online => "실시간 송출 중",
-        ChannelStatus.Alerting => "위반 탐지됨!",
-        ChannelStatus.Offline => "오프라인",
-        ChannelStatus.Connecting => "연결 중...",
-        _ => "알 수 없음"
+        ChannelStatus.Online => "Online",
+        ChannelStatus.Alerting => "Alerting",
+        ChannelStatus.Offline => "Offline",
+        ChannelStatus.Connecting => "Connecting",
+        _ => "Unknown"
     };
 
     public void Dispose() { }

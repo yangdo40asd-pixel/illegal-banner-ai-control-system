@@ -4,8 +4,9 @@ namespace BannerGuardSystem.Views;
 
 public partial class SystemSettingsView : UserControl
 {
-    public SystemSettingsView()
+    public SystemSettingsView(BannerGuardSystem.ViewModels.SystemSettingsViewModel viewModel)
     {
         InitializeComponent();
+        DataContext = viewModel;
     }
 }

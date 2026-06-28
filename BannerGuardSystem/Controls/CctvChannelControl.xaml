@@ -6,6 +6,7 @@
              xmlns:models="clr-namespace:BannerGuardSystem.Models"
              xmlns:converters="clr-namespace:BannerGuardSystem.Converters"
              xmlns:controls="clr-namespace:BannerGuardSystem.Controls"
+             xmlns:vlc="clr-namespace:LibVLCSharp.WPF;assembly=LibVLCSharp.WPF"
              mc:Ignorable="d" 
              d:DesignHeight="300" d:DesignWidth="400">
     
@@ -26,38 +27,30 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="{Binding Name}" FontWeight="Bold" Foreground="#F5F5F7" VerticalAlignment="Center"/>
-                <TextBlock Grid.Column="1" Text="A" Foreground="#FF9F0A" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                <TextBlock Grid.Column="0" Text="{Binding Name}" FontWeight="Bold" Foreground="#F5F5F7" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                <TextBlock Grid.Column="1" Text="{Binding ZoneLabel}" Foreground="#FF9F0A" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,4,0"/>
             </Grid>
         </Border>
 
-        <Border Grid.Row="1" BorderBrush="#3F3F46" BorderThickness="1" CornerRadius="0,0,4,4" Background="#1C1C1E" ClipToBounds="True">
-            <Grid x:Name="VideoContainerGrid" ClipToBounds="True" Background="#1C1C1E">
+        <Border Grid.Row="1" BorderBrush="#3F3F46" BorderThickness="1" CornerRadius="0,0,4,4" Background="#000000" ClipToBounds="True">
+            <Grid>
+            <Grid x:Name="VideoContainerGrid" ClipToBounds="True" Background="#000000">
+                <!-- VLC: HWND는 아래(0). 재생 실패 시 검은 화면이 포스터를 가리지 않도록 -->
+                <vlc:VideoView x:Name="ChannelVideoView"
+                               Background="Transparent"
+                               HorizontalAlignment="Stretch"
+                               VerticalAlignment="Stretch"
+                               Panel.ZIndex="0" />
+
+                <!-- 포스터: 실제 프레임 확인 전까지 VideoView 위(1)에 유지 -->
                 <Image x:Name="PlaceholderImage"
                        Source="{Binding DefaultImagePath, Converter={StaticResource ImageLoaderConverter}}"
                        Stretch="Uniform"
-                       Panel.ZIndex="0"
-                       Visibility="Collapsed"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       Panel.ZIndex="1"
+                       Visibility="Visible"
                        IsHitTestVisible="False"/>
-
-                <MediaElement x:Name="ChannelMediaElement"
-                              Panel.ZIndex="1"
-                              LoadedBehavior="Manual"
-                              UnloadedBehavior="Manual"
-                              Stretch="Uniform"
-                              IsMuted="True"
-                              ScrubbingEnabled="False"
-                              Volume="0"
-                              MediaFailed="ChannelMediaElement_MediaFailed"
-                              MediaEnded="ChannelMediaElement_MediaEnded"/>
-
-                <!-- 탐지 시: MP4 위에 YOLO 박스 N개 투명 오버레이 -->
-                <controls:YoloBBoxOverlay Panel.ZIndex="2"
-                                        Alerts="{Binding CurrentAlerts}"
-                                        NativeFrameWidth="{Binding OverlayFrameWidth}"
-                                        NativeFrameHeight="{Binding OverlayFrameHeight}"
-                                        IsActive="{Binding IsAlerting}"
-                                        OverlayOnly="True"/>
 
                 <Border VerticalAlignment="Top" HorizontalAlignment="Left" Margin="8" Padding="5,2" Background="#A0000000" CornerRadius="2" Panel.ZIndex="3" IsHitTestVisible="False">
                     <TextBlock Text="{Binding Name, StringFormat='인천광역시 {0}'}" Foreground="White" FontSize="10" FontWeight="SemiBold"/>
@@ -74,6 +67,24 @@
                     </Border>
                     <Rectangle x:Name="TempRoiRect" Fill="#40FF4757" Stroke="#FF4757" StrokeThickness="1" Visibility="Collapsed"/>
                 </Canvas>
+            </Grid>
+
+            <!-- VLC HWND 위에 WPF 박스를 올리기 위한 Popup (HwndHost airspace 우회) -->
+            <Popup x:Name="YoloPopup"
+                   PlacementTarget="{Binding ElementName=VideoContainerGrid}"
+                   Placement="Relative"
+                   AllowsTransparency="True"
+                   StaysOpen="True"
+                   IsHitTestVisible="False">
+                <controls:YoloBBoxOverlay x:Name="YoloOverlay"
+                                        DataContext="{Binding DataContext, ElementName=VideoContainerGrid}"
+                                        Background="Transparent"
+                                        Alerts="{Binding CurrentAlerts}"
+                                        NativeFrameWidth="{Binding OverlayFrameWidth}"
+                                        NativeFrameHeight="{Binding OverlayFrameHeight}"
+                                        IsActive="{Binding HasDetections}"
+                                        OverlayOnly="True"/>
+            </Popup>
             </Grid>
         </Border>
     </Grid>

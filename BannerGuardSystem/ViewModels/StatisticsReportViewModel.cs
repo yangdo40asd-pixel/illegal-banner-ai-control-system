@@ -18,6 +18,7 @@ public class StatisticsReportViewModel : BaseViewModel
 {
     private readonly IStatisticsRepository _repository;
     private readonly IStatisticsExcelExportService _excelExport;
+    private readonly IDialogService _dialog;
     private StatisticsReportData _report = new();
 
     private ReportPeriodType _selectedPeriod = ReportPeriodType.Monthly;
@@ -26,16 +27,16 @@ public class StatisticsReportViewModel : BaseViewModel
     private ContentCategory? _selectedCategory;
     private string _drillDownTitle = string.Empty;
 
-    public StatisticsReportViewModel()
-        : this(new MockStatisticsRepository(), new StatisticsExcelExportService())
-    {
-    }
 
-    public StatisticsReportViewModel(IStatisticsRepository repository, IStatisticsExcelExportService excelExport)
+
+    public StatisticsReportViewModel(IStatisticsRepository repository, IStatisticsExcelExportService excelExport, IDialogService dialog)
     {
         ChartFontHelper.ConfigureLiveCharts();
         _repository = repository;
         _excelExport = excelExport;
+        _dialog = dialog;
+
+        RefreshCommand = new SimpleCommand(Refresh);
 
         PeriodOptions = new ObservableCollection<string>();
         Categories = new ObservableCollection<CategoryRatioItem>();
@@ -163,6 +164,7 @@ public class StatisticsReportViewModel : BaseViewModel
     public ICommand ClearDrillDownCommand { get; }
     public ICommand DownloadReportCommand { get; }
     public ICommand PrintCommand { get; }
+    public ICommand RefreshCommand { get; }
 
     private void ReloadPeriodOptions()
     {
@@ -351,19 +353,16 @@ public class StatisticsReportViewModel : BaseViewModel
         try
         {
             _excelExport.Export(_report, SelectedPeriodLabel, dialog.FileName);
-            MessageBox.Show($"리포트가 저장되었습니다.\n{dialog.FileName}", "리포트 다운로드",
-                MessageBoxButton.OK, MessageBoxImage.Information);
+            _dialog.ShowInfo($"리포트가 저장되었습니다.\n{dialog.FileName}", "리포트 다운로드");
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"저장 실패: {ex.Message}", "리포트 다운로드",
-                MessageBoxButton.OK, MessageBoxImage.Error);
+            _dialog.ShowError($"저장 실패: {ex.Message}", "리포트 다운로드");
         }
     }
 
     private void OnPrint()
     {
-        MessageBox.Show($"{SelectedPeriodLabel} 통계 리포트 인쇄 미리보기를 준비합니다.\n(데모)",
-            "인쇄", MessageBoxButton.OK, MessageBoxImage.Information);
+        _dialog.ShowInfo($"{SelectedPeriodLabel} 통계 리포트 인쇄 미리보기를 준비합니다.\n(데모)", "인쇄");
     }
 }
