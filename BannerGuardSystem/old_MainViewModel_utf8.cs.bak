@@ -1,4 +1,4 @@
-#define DEBUG
+﻿#define DEBUG
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -52,15 +52,15 @@ public class MainViewModel : BaseViewModel, IDisposable
 
 	private BannerDetectionEventDto? _activeAlert;
 
-	private string _mapQuery = "인천광역시 연수구 송도동";
+	private string _mapQuery = "?몄쿇愿묒뿭???곗닔援??〓룄??;
 
 	private string _connectionStatus = "Disconnected";
 
 	private bool _isConnected;
 
-	private string _systemModeText = "데모 버전 (송도동 한정)";
+	private string _systemModeText = "?곕え 踰꾩쟾 (?〓룄???쒖젙)";
 
-	private string _aiStatusText = "수신 대기 중 (Listening)";
+	private string _aiStatusText = "?섏떊 ?湲?以?(Listening)";
 
 	private bool _isImageCropEnabled = true;
 
@@ -90,7 +90,7 @@ public class MainViewModel : BaseViewModel, IDisposable
 
 	private readonly Dictionary<string, DateTime> _lastIncidentTime = new Dictionary<string, DateTime>();
 
-	/// <summary>동일 소스 재분석 시 검증완료 중복 집계 방지</summary>
+	/// <summary>?숈씪 ?뚯뒪 ?щ텇????寃利앹셿猷?以묐났 吏묎퀎 諛⑹?</summary>
 	private readonly HashSet<string> _vlmCompletedKeys = new HashSet<string>();
 
 
@@ -277,7 +277,7 @@ public class MainViewModel : BaseViewModel, IDisposable
 		}
 	}
 
-	public string IsImageCropEnabledText => IsImageCropEnabled ? "이미지 크롭: ON" : "이미지 크롭: OFF";
+	public string IsImageCropEnabledText => IsImageCropEnabled ? "?대?吏 ?щ∼: ON" : "?대?吏 ?щ∼: OFF";
 
 	public bool IsAutomationEnabled
 	{
@@ -292,8 +292,8 @@ public class MainViewModel : BaseViewModel, IDisposable
 				_ = _wsService?.SendCommandAsync("toggle_automation", value);
 				if (IsConnected)
 					AiStatusText = value
-						? "분석 실행 중..."
-						: "자동화 OFF — 분석 정지";
+						? "遺꾩꽍 ?ㅽ뻾 以?.."
+						: "?먮룞??OFF ??遺꾩꽍 ?뺤?";
 			}
 		}
 	}
@@ -412,10 +412,10 @@ public class MainViewModel : BaseViewModel, IDisposable
 
 	public ICommand RequestReviewCommand { get; }
 
-	/// <summary>단축키 호환 (Space → 불법 확정)</summary>
+	/// <summary>?⑥텞???명솚 (Space ??遺덈쾿 ?뺤젙)</summary>
 	public ICommand ApproveCommand => ConfirmIllegalCommand;
 
-	/// <summary>단축키 호환 (Escape → 재검토)</summary>
+	/// <summary>?⑥텞???명솚 (Escape ???ш???</summary>
 	public ICommand DismissCommand => RequestReviewCommand;
 
 	public ICommand ToggleRoiModeCommand { get; }
@@ -545,14 +545,14 @@ public class MainViewModel : BaseViewModel, IDisposable
 				{
 					ConnectionStatus = "Connected (Live)";
 					AiStatusText = IsAutomationEnabled
-						? "수신 대기 중 (Listening)"
-						: "자동화 OFF — 분석 정지";
+						? "?섏떊 ?湲?以?(Listening)"
+						: "?먮룞??OFF ??遺꾩꽍 ?뺤?";
 					_ = _wsService.SendCommandAsync("toggle_automation", IsAutomationEnabled);
 				}
 				else
 				{
 					ConnectionStatus = "Disconnected";
-					AiStatusText = "서버 연결 끊김 (Off)";
+					AiStatusText = "?쒕쾭 ?곌껐 ?딄? (Off)";
 				}
 			}
 			catch (Exception ex)
@@ -566,10 +566,10 @@ public class MainViewModel : BaseViewModel, IDisposable
 	{
 		(string, string, string)[] array = new(string, string, string)[4]
 		{
-			("CCTV_01", "CCTV_01 삼산동 A구역", "d:\\138.종합 민원 이미지 AI데이터\\WPF\\20260525_133553.mp4"),
-			("CCTV_02", "CCTV_02 삼산동 B구역", "d:\\138.종합 민원 이미지 AI데이터\\WPF\\20260525_133611.mp4"),
-			("CCTV_03", "CCTV_03 구월동 A구역", "d:\\138.종합 민원 이미지 AI데이터\\WPF\\20260525_133838.mp4"),
-			("CCTV_04", "CCTV_04 구월동 B구역", "d:\\138.종합 민원 이미지 AI데이터\\WPF\\20260525_133919.mp4")
+			("CCTV_01", "CCTV_01 ?쇱궛??A援ъ뿭", "d:\\138.醫낇빀 誘쇱썝 ?대?吏 AI?곗씠??\WPF\\20260525_133553.mp4"),
+			("CCTV_02", "CCTV_02 ?쇱궛??B援ъ뿭", "d:\\138.醫낇빀 誘쇱썝 ?대?吏 AI?곗씠??\WPF\\20260525_133611.mp4"),
+			("CCTV_03", "CCTV_03 援ъ썡??A援ъ뿭", "d:\\138.醫낇빀 誘쇱썝 ?대?吏 AI?곗씠??\WPF\\20260525_133838.mp4"),
+			("CCTV_04", "CCTV_04 援ъ썡??B援ъ뿭", "d:\\138.醫낇빀 誘쇱썝 ?대?吏 AI?곗씠??\WPF\\20260525_133919.mp4")
 		};
 		(string, string, string)[] array2 = array;
 		for (int i = 0; i < array2.Length; i++)
@@ -581,14 +581,14 @@ public class MainViewModel : BaseViewModel, IDisposable
 			CctvChannel cctvChannel = new CctvChannel();
 			cctvChannel.ChannelId = item;
 			cctvChannel.Name = item2;
-			cctvChannel.Gu = ((item == "CCTV_01" || item == "CCTV_02") ? "부평구" : "남동구");
-			cctvChannel.Dong = ((item == "CCTV_01" || item == "CCTV_02") ? "삼산동" : "구월동");
+			cctvChannel.Gu = ((item == "CCTV_01" || item == "CCTV_02") ? "遺?됯뎄" : "?⑤룞援?);
+			cctvChannel.Dong = ((item == "CCTV_01" || item == "CCTV_02") ? "?쇱궛?? : "援ъ썡??);
 			cctvChannel.Address = item switch
 			{
-				"CCTV_03" => "인천 남동구 구월동 78", 
-				"CCTV_02" => "인천 부평구 삼산동 45", 
-				"CCTV_01" => "인천 부평구 삼산동 12", 
-				_ => "인천 남동구 구월동 10", 
+				"CCTV_03" => "?몄쿇 ?⑤룞援?援ъ썡??78", 
+				"CCTV_02" => "?몄쿇 遺?됯뎄 ?쇱궛??45", 
+				"CCTV_01" => "?몄쿇 遺?됯뎄 ?쇱궛??12", 
+				_ => "?몄쿇 ?⑤룞援?援ъ썡??10", 
 			};
 			CctvChannel cctvChannel2 = cctvChannel;
 			if (1 == 0)
@@ -616,7 +616,7 @@ public class MainViewModel : BaseViewModel, IDisposable
 	{
 		BaseViewModel.RunOnUi(delegate
 		{
-			AiStatusText = "AI 분석 수신 완료 (Running)";
+			AiStatusText = "AI 遺꾩꽍 ?섏떊 ?꾨즺 (Running)";
 			var channel = Channels.FirstOrDefault(c => c.ChannelId == batch.CctvId);
 			if (channel != null)
 				channel.ApplyDetectionBatch(batch);
@@ -629,12 +629,12 @@ public class MainViewModel : BaseViewModel, IDisposable
 	{
 		BaseViewModel.RunOnUi(delegate
 		{
-			// VLM 검증 완료(IsVlmTriggered) 건만 Feed·상세 패널에 반영
+			// VLM 寃利??꾨즺(IsVlmTriggered) 嫄대쭔 Feed쨌?곸꽭 ?⑤꼸??諛섏쁺
 			var vlmCompleted = batch.Detections.Where(d => d.IsVlmTriggered).ToList();
 			if (vlmCompleted.Count == 0)
 				return;
 
-			AiStatusText = "VLM 검증 완료";
+			AiStatusText = "VLM 寃利??꾨즺";
 
 			foreach (var alertDto in vlmCompleted)
 			{
@@ -657,7 +657,7 @@ public class MainViewModel : BaseViewModel, IDisposable
 			//IL_0312: Unknown result type (might be due to invalid IL or missing references)
 			//IL_0317: Unknown result type (might be due to invalid IL or missing references)
 			//IL_032a: Expected O, but got Unknown
-			AiStatusText = "AI 분석 수신 완료 (Running)";
+			AiStatusText = "AI 遺꾩꽍 ?섏떊 ?꾨즺 (Running)";
 			ProcessAlertForFeed(alertDto);
 			ActiveAlert = alertDto;
 			HighlightChannelAlertState(alertDto.CctvId, alertDto.HasBanner, alertDto);
@@ -696,7 +696,7 @@ public class MainViewModel : BaseViewModel, IDisposable
 		{
 			if (isPreviewRefresh)
 			{
-				// 프리뷰만 재수신: 이미지·박스만 갱신, 검증완료 상태·분석 결과 유지
+				// ?꾨━酉곕쭔 ?ъ닔?? ?대?吏쨌諛뺤뒪留?媛깆떊, 寃利앹셿猷??곹깭쨌遺꾩꽍 寃곌낵 ?좎?
 				existing.BoundingBox = alertDto.BoundingBox;
 				existing.CroppedImageBase64 = alertDto.CroppedImageBase64;
 				existing.FullImageBase64 = alertDto.FullImageBase64;
@@ -733,7 +733,7 @@ public class MainViewModel : BaseViewModel, IDisposable
 			}
 		}
 
-		// 검증완료: 소스당 최초 1회만 집계 (false→true 전환)
+		// 寃利앹셿猷? ?뚯뒪??理쒖큹 1?뚮쭔 吏묎퀎 (false?뭪rue ?꾪솚)
 		if (alertDto.IsVlmTriggered && !wasVlmTriggered && !_vlmCompletedKeys.Contains(incidentKey))
 		{
 			_vlmCompletedKeys.Add(incidentKey);
@@ -741,12 +741,12 @@ public class MainViewModel : BaseViewModel, IDisposable
 			if (PendingCount > 0)
 				PendingCount--;
 
-			// 긴급 판정 → 단속처리 현황 DB 등록
+			// 湲닿툒 ?먯젙 ???⑥냽泥섎━ ?꾪솴 DB ?깅줉
 			var feedItem = AlertFeed.FirstOrDefault(SameFeedItem) ?? alertDto;
 			if (_dbService.TryInsertUrgentEnforcement(feedItem))
 			{
 				_enforcementStatusViewModel?.Refresh();
-				Debug.WriteLine($"[단속연동] 긴급 등록: {feedItem.ObjectIdText}");
+				Debug.WriteLine($"[?⑥냽?곕룞] 湲닿툒 ?깅줉: {feedItem.ObjectIdText}");
 			}
 		}
 
@@ -762,7 +762,7 @@ public class MainViewModel : BaseViewModel, IDisposable
 		timer.Tick += delegate
 		{
 			if (IsConnected)
-				AiStatusText = "수신 대기 중 (Listening)";
+				AiStatusText = "?섏떊 ?湲?以?(Listening)";
 			timer.Stop();
 		};
 		timer.Start();
@@ -827,21 +827,21 @@ public class MainViewModel : BaseViewModel, IDisposable
 		};
 		string label = verdict switch
 		{
-			"LEGAL" => "[관제관 확정] 합법 확인",
-			"ILLEGAL" => "[관제관 확정] 불법 확정",
-			_ => "[관제관 요청] 재검토 필요",
+			"LEGAL" => "[愿?쒓? ?뺤젙] ?⑸쾿 ?뺤씤",
+			"ILLEGAL" => "[愿?쒓? ?뺤젙] 遺덈쾿 ?뺤젙",
+			_ => "[愿?쒓? ?붿껌] ?ш????꾩슂",
 		};
 		string dbStatus = verdict switch
 		{
-			"LEGAL" => "합법확정",
-			"ILLEGAL" => "불법확정",
-			_ => "재검토요청",
+			"LEGAL" => "?⑸쾿?뺤젙",
+			"ILLEGAL" => "遺덈쾿?뺤젙",
+			_ => "?ш??좎슂泥?,
 		};
 		string dbVerdict = verdict switch
 		{
-			"LEGAL" => "합법",
-			"ILLEGAL" => "불법",
-			_ => "재검토",
+			"LEGAL" => "?⑸쾿",
+			"ILLEGAL" => "遺덈쾿",
+			_ => "?ш???,
 		};
 
 		alert.StatusCode = statusCode;
@@ -879,7 +879,7 @@ public class MainViewModel : BaseViewModel, IDisposable
 		if (verdict == "REVIEW")
 		{
 			_alertFeedView.Refresh();
-			Debug.WriteLine($"재검토 요청: {alert.ObjectIdText}");
+			Debug.WriteLine($"?ш????붿껌: {alert.ObjectIdText}");
 			return;
 		}
 
@@ -891,7 +891,7 @@ public class MainViewModel : BaseViewModel, IDisposable
 		_alertFeedView.Refresh();
 		SelectNextPendingAlert();
 		TriggerImmediateGC();
-		Debug.WriteLine($"{label} — Feed 제거: {alert.ObjectIdText}");
+		Debug.WriteLine($"{label} ??Feed ?쒓굅: {alert.ObjectIdText}");
 	}
 
 	private static string ResolveLegalStatusCode(BannerDetectionEventDto alert) =>
@@ -903,7 +903,7 @@ public class MainViewModel : BaseViewModel, IDisposable
 
 	private void GeneratePdfAdministrativeReport(BannerDetectionEventDto alert)
 	{
-		string reportsFolder = Path.Combine("d:\\138.종합 민원 이미지 AI데이터\\BannerGuardSystem", "Reports");
+		string reportsFolder = Path.Combine("d:\\138.醫낇빀 誘쇱썝 ?대?吏 AI?곗씠??\BannerGuardSystem", "Reports");
 		Task.Run(delegate
 		{
 			try
@@ -912,22 +912,22 @@ public class MainViewModel : BaseViewModel, IDisposable
 				{
 					Directory.CreateDirectory(reportsFolder);
 				}
-				string path = $"단속보고서_{alert.CctvId}_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
+				string path = $"?⑥냽蹂닿퀬??{alert.CctvId}_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
 				string text = Path.Combine(reportsFolder, path);
 				_pdfReportService.GenerateReport(alert, text);
-				Debug.WriteLine("[ApproveCommand] PDF 행정 보고서 생성 완료: " + text);
+				Debug.WriteLine("[ApproveCommand] PDF ?됱젙 蹂닿퀬???앹꽦 ?꾨즺: " + text);
 			}
 			catch (UnauthorizedAccessException ex)
 			{
-				Debug.WriteLine("[ApproveCommand] PDF 생성 실패 (디스크 권한 오류): " + ex.Message);
+				Debug.WriteLine("[ApproveCommand] PDF ?앹꽦 ?ㅽ뙣 (?붿뒪??沅뚰븳 ?ㅻ쪟): " + ex.Message);
 			}
 			catch (IOException ex2)
 			{
-				Debug.WriteLine("[ApproveCommand] PDF 생성 실패 (디스크 I/O 오류): " + ex2.Message);
+				Debug.WriteLine("[ApproveCommand] PDF ?앹꽦 ?ㅽ뙣 (?붿뒪??I/O ?ㅻ쪟): " + ex2.Message);
 			}
 			catch (Exception ex3)
 			{
-				Debug.WriteLine("[ApproveCommand] PDF 생성 중 예상치 못한 오류 발생: " + ex3.Message);
+				Debug.WriteLine("[ApproveCommand] PDF ?앹꽦 以??덉긽移?紐삵븳 ?ㅻ쪟 諛쒖깮: " + ex3.Message);
 			}
 		});
 	}

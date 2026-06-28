@@ -36,6 +36,20 @@ public enum BackupCycle
     Monthly
 }
 
+/// <summary>데이터 관리 화면 하위 탭.</summary>
+public enum DataManagementPageTab
+{
+    Data,
+    Model
+}
+
+public sealed class VlmModelOption
+{
+    public string DisplayName { get; init; } = string.Empty;
+    public string ModelId { get; init; } = string.Empty;
+    public string Description { get; init; } = string.Empty;
+}
+
 public class SystemSettingsRoot
 {
     public List<CctvConfigItem> CctvItems { get; set; } = [];
@@ -161,6 +175,25 @@ public class DataManagementSettings
     public string ReportRetention { get; set; } = "3년";
     public string RecordingRetention { get; set; } = "14일";
     public bool ExportBeforeDelete { get; set; } = true;
+
+    /// <summary>선택된 VLM 모델 HuggingFace ID (백엔드 Qwen2.5-VL 등).</summary>
+    public string VlmModelId { get; set; } = "Qwen/Qwen2.5-VL-3B-Instruct";
+
+    /// <summary>UI 표시용 모델명.</summary>
+    public string VlmModelDisplayName { get; set; } = "Qwen 2.5-VL (3B Instruct)";
+}
+
+public static class VlmModelCatalog
+{
+    public static IReadOnlyList<VlmModelOption> Available { get; } =
+    [
+        new()
+        {
+            DisplayName = "Qwen 2.5-VL (3B Instruct)",
+            ModelId = "Qwen/Qwen2.5-VL-3B-Instruct",
+            Description = "현재 운영 중인 VLM — YOLO 탐지 후 맥락·문자 분석에 사용됩니다."
+        }
+    ];
 }
 
 public static class SystemSettingsDefaults

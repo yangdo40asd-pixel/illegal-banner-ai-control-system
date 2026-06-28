@@ -13,7 +13,7 @@ public partial class MainWindow : Window
 
     private void Window_KeyDown(object sender, KeyEventArgs e)
     {
-        if (DataContext is MainViewModel vm)
+        if (DataContext is ShellViewModel vm)
         {
             if (e.Key == Key.Space)
             {

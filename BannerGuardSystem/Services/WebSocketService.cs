@@ -204,6 +204,9 @@ public class WebSocketService : IDisposable
         await SendJsonAsync(new { command, value });
     }
 
+    public Task RequestCctvFrameAnalysisAsync(string cctvId, long positionMs)
+        => SendJsonAsync(new { command = "cctv_analyze", cctvId, positionMs });
+
     public async Task SendJsonAsync(object payload)
     {
         if (_ws == null || _ws.State != WebSocketState.Open)
