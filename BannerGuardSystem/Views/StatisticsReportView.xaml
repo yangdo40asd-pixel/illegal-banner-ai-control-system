@@ -112,6 +112,11 @@
                 </StackPanel>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <Button Content="새로고침" Command="{Binding RefreshCommand}"
+                            Background="White" Foreground="#374151" BorderBrush="#D1D5DB" BorderThickness="1"
+                            Padding="14,8" FontSize="12" FontWeight="SemiBold" Margin="0,0,8,0" Cursor="Hand">
+                        <Button.Resources><Style TargetType="Border"><Setter Property="CornerRadius" Value="4"/></Style></Button.Resources>
+                    </Button>
                     <Button Content="리포트 다운로드" Command="{Binding DownloadReportCommand}"
                             Background="#00A896" Foreground="White" BorderThickness="0"
                             Padding="14,8" FontSize="12" FontWeight="SemiBold" Margin="0,0,8,0" Cursor="Hand">

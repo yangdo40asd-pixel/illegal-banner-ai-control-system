@@ -11,6 +11,8 @@ namespace BannerGuardSystem.ViewModels;
 public class EnforcementStatusViewModel : BaseViewModel
 {
     private readonly DatabaseService _db;
+    private readonly IDialogService _dialog;
+    private readonly AlertService _alertService;
     private List<EnforcementRecord> _allRecords = [];
     private string _searchText = string.Empty;
     private EnforcementRecord? _selectedRecord;
@@ -18,11 +20,15 @@ public class EnforcementStatusViewModel : BaseViewModel
 
     public event Action<EnforcementRecord>? DetailDialogRequested;
 
-    public EnforcementStatusViewModel(DatabaseService db)
+    public EnforcementStatusViewModel(DatabaseService db, IDialogService dialog, AlertService alertService)
     {
         _db = db;
+        _dialog = dialog;
+        _alertService = alertService;
         Records = new ObservableCollection<EnforcementRecord>();
         SimilarityRecords = new ObservableCollection<SimilarEnforcementRecord>();
+
+        _alertService.EnforcementListChanged += OnEnforcementListChanged;
 
         SearchCommand = new SimpleCommand(ApplyFilter);
         ExportExcelCommand = new SimpleCommand(OnExportExcel);
@@ -30,9 +36,12 @@ public class EnforcementStatusViewModel : BaseViewModel
         DetailCommand = new RelayCommand(OnDetail);
         SecondaryActionCommand = new RelayCommand(OnSecondaryAction);
         CloseDialogCommand = new SimpleCommand(() => IsDialogOpen = false);
+        RefreshCommand = new SimpleCommand(Refresh);
 
         Refresh();
     }
+
+    private void OnEnforcementListChanged() => RunOnUi(Refresh);
 
     public ObservableCollection<EnforcementRecord> Records { get; }
     public ObservableCollection<SimilarEnforcementRecord> SimilarityRecords { get; }
@@ -98,6 +107,7 @@ public class EnforcementStatusViewModel : BaseViewModel
     public ICommand DetailCommand { get; }
     public ICommand SecondaryActionCommand { get; }
     public ICommand CloseDialogCommand { get; }
+    public ICommand RefreshCommand { get; }
 
     public void Refresh()
     {
@@ -189,25 +199,16 @@ public class EnforcementStatusViewModel : BaseViewModel
     {
         if (parameter is not EnforcementRecord record) return;
         SelectedRecord = record;
-        MessageBox.Show(
-            $"{record.EnforcementNoDisplay} — [{record.SecondaryAction}] 처리를 진행합니다.",
-            "단속 처리",
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
+        _dialog.ShowInfo($"{record.EnforcementNoDisplay} — [{record.SecondaryAction}] 처리를 진행합니다.", "단속 처리");
     }
 
     private void OnExportExcel()
     {
-        MessageBox.Show(
-            $"단속 현황 {_allRecords.Count}건 (검증 긴급 연동 데이터)",
-            "엑셀 다운로드",
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
+        _dialog.ShowInfo($"단속 현황 {_allRecords.Count}건 (검증 긴급 연동 데이터)", "엑셀 다운로드");
     }
 
     private void OnPrint()
     {
-        MessageBox.Show($"단속 현황 {_allRecords.Count}건 인쇄 준비", "인쇄",
-            MessageBoxButton.OK, MessageBoxImage.Information);
+        _dialog.ShowInfo($"단속 현황 {_allRecords.Count}건 인쇄 준비", "인쇄");
     }
 }

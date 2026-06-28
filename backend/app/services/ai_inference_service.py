@@ -1496,6 +1496,9 @@ class AIInferenceService:
             full_address = f"VLM 검증 ({label})"
 
         if boxes is None or len(boxes) == 0:
+            # CCTV LIVE: 미탐지 시 빈 배열 → WPF가 박스 제거(영상 추적)
+            if not cctv_id.startswith("VLM_"):
+                return []
             return [
                 BannerDetectionEvent(
                     Id=str(uuid.uuid4()),

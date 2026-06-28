@@ -32,10 +32,10 @@ public class ViolationRecord
     public string ConfidenceText => $"{Confidence * 100:F1}%";
     public string FullAddress => string.IsNullOrEmpty(LocationAddress) ? $"{Gu} {Dong}" : LocationAddress;
     
-    public SolidColorBrush StatusColor => Status switch
+    public string StatusColorKey => Status switch
     {
-        "철거완료"   => new SolidColorBrush(Color.FromRgb(0x2E, 0xD5, 0x73)), // Green
-        "행정처분" => new SolidColorBrush(Color.FromRgb(0xFF, 0xA5, 0x02)), // Orange
-        _            => new SolidColorBrush(Color.FromRgb(0xFF, 0x47, 0x57))  // Red
+        "철거완료"   => "#2ED573", // Green
+        "행정처분"   => "#FFA502", // Orange
+        _            => "#FF4757"  // Red
     };
 }

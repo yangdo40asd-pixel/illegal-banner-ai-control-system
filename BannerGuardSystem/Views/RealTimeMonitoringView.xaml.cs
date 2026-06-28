@@ -1,36 +1,31 @@
 using System.Windows.Controls;
+using BannerGuardSystem.ViewModels;
 
 namespace BannerGuardSystem.Views
 {
     public partial class RealTimeMonitoringView : UserControl
     {
-        public RealTimeMonitoringView()
+        public RealTimeMonitoringView(RealTimeMonitoringViewModel viewModel)
         {
             InitializeComponent();
+            this.DataContext = viewModel;
             this.Loaded += RealTimeMonitoringView_Loaded;
-            this.DataContextChanged += RealTimeMonitoringView_DataContextChanged;
         }
 
-        private void RealTimeMonitoringView_DataContextChanged(object sender, System.Windows.DependencyPropertyChangedEventArgs e)
-        {
-            if (e.OldValue is ViewModels.MainViewModel oldVm)
-            {
-                oldVm.PropertyChanged -= Vm_PropertyChanged;
-            }
-            if (e.NewValue is ViewModels.MainViewModel newVm)
-            {
-                newVm.PropertyChanged += Vm_PropertyChanged;
-                UpdateMap(newVm.MapQuery);
-            }
-        }
 
-        private void Vm_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+
+        private async void RealTimeMonitoringView_Loaded(object sender, System.Windows.RoutedEventArgs e)
         {
-            if (e.PropertyName == "MapQuery")
+            try
             {
-                var vm = DataContext as ViewModels.MainViewModel;
-                UpdateMap(vm?.MapQuery);
+                await MapWebView.EnsureCoreWebView2Async(null);
+                // Assuming viewModel has a MapQuery property; otherwise, map initialization can be added later.
+                if (DataContext is RealTimeMonitoringViewModel vm && !string.IsNullOrEmpty(vm.MapQuery))
+                {
+                    UpdateMap(vm.MapQuery);
+                }
             }
+            catch { }
         }
 
         private async void UpdateMap(string query)
@@ -38,7 +33,6 @@ namespace BannerGuardSystem.Views
             if (string.IsNullOrEmpty(query)) return;
             try
             {
-                await MapWebView.EnsureCoreWebView2Async(null);
                 string html = $@"
 <!DOCTYPE html>
 <html>
@@ -54,22 +48,6 @@ namespace BannerGuardSystem.Views
 </body>
 </html>";
                 MapWebView.NavigateToString(html);
-            }
-            catch { }
-        }
-
-        private async void RealTimeMonitoringView_Loaded(object sender, System.Windows.RoutedEventArgs e)
-        {
-            try
-            {
-                // Explicitly ensure WebView2 is initialized before navigating
-                await MapWebView.EnsureCoreWebView2Async(null);
-                
-                var vm = DataContext as ViewModels.MainViewModel;
-                if (vm != null && !string.IsNullOrEmpty(vm.MapQuery))
-                {
-                    UpdateMap(vm.MapQuery);
-                }
             }
             catch { }
         }

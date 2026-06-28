@@ -4,8 +4,9 @@ namespace BannerGuardSystem.Views;
 
 public partial class StatisticsReportView : UserControl
 {
-    public StatisticsReportView()
+    public StatisticsReportView(BannerGuardSystem.ViewModels.StatisticsReportViewModel viewModel)
     {
         InitializeComponent();
+        DataContext = viewModel;
     }
 }

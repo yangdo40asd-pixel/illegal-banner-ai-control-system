@@ -135,25 +135,43 @@ CCTV_IMAGE_MAP = {
 }
 
 
-def _read_video_frame(video_path: str):
-    """Windows 한글 경로 호환 — MP4 첫 프레임 읽기."""
+def _open_video_capture(video_path: str):
+    """Windows 한글 경로 호환 VideoCapture."""
     if not os.path.isfile(video_path):
-        return None, 0, 0
+        return None
 
     cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        data = np.fromfile(video_path, dtype=np.uint8)
-        cap = cv2.VideoCapture()
-        if not cap.open(cv2.imdecode(data, cv2.IMREAD_COLOR)):
-            return None, 0, 0
+    if cap.isOpened():
+        return cap
 
-    ok, frame = cap.read()
-    cap.release()
-    if not ok or frame is None:
+    data = np.fromfile(video_path, dtype=np.uint8)
+    cap = cv2.VideoCapture()
+    if cap.open(cv2.imdecode(data, cv2.IMREAD_COLOR)):
+        return cap
+    return None
+
+
+def _read_video_frame_at_ms(video_path: str, position_ms: int = 0):
+    """MP4 특정 재생 시각(ms) 프레임 — LIVE 박스 추적용."""
+    cap = _open_video_capture(video_path)
+    if cap is None:
         return None, 0, 0
 
-    h, w = frame.shape[:2]
-    return frame, w, h
+    try:
+        if position_ms > 0:
+            cap.set(cv2.CAP_PROP_POS_MSEC, float(position_ms))
+        ok, frame = cap.read()
+        if not ok or frame is None:
+            return None, 0, 0
+        h, w = frame.shape[:2]
+        return frame, w, h
+    finally:
+        cap.release()
+
+
+def _read_video_frame(video_path: str):
+    """Windows 한글 경로 호환 — MP4 첫 프레임 읽기."""
+    return _read_video_frame_at_ms(video_path, 0)
 
 
 def _read_image_file(image_path: str):
@@ -209,12 +227,12 @@ def dedupe_detections(events: List[BannerDetectionEvent], iou_thresh: float = 0.
     return kept
 
 
-def get_cctv_sources() -> List[Tuple[str, str, int, int]]:
-    """CCTV 전용 — MP4 첫 프레임 (bbox 좌표 = LIVE 영상 기준)."""
+def get_cctv_sources(position_ms: int = 0) -> List[Tuple[str, str, int, int]]:
+    """CCTV 전용 — MP4 프레임 (bbox 좌표 = LIVE 영상 기준)."""
     sources = []
     for cctv_id, mp4_name in CCTV_VIDEO_MAP.items():
         mp4_path = os.path.join(WPF_DIR, mp4_name)
-        frame, w, h = _read_video_frame(mp4_path)
+        frame, w, h = _read_video_frame_at_ms(mp4_path, position_ms)
         if frame is not None:
             try:
                 temp_path = _write_temp_jpeg(frame, cctv_id)
@@ -303,6 +321,11 @@ async def _run_yolo_preview_and_send(
         ai_engine.run_yolo_preview_as_event, image_path, cctv_id, source_image
     )
     deduped = dedupe_detections(events)
+    if message_type == "channel_batch":
+        deduped = [
+            e for e in deduped
+            if e.HasBanner and e.BoundingBox.Width > 0 and e.BoundingBox.Height > 0
+        ]
     if message_type == "vlm_image_batch" and not deduped:
         deduped = [_make_vlm_no_detection_event(cctv_id, image_path, source_image)]
     batch = ChannelDetectionBatch(
@@ -332,6 +355,11 @@ async def _run_inference_and_send(
         ai_engine.run_inference_as_event, image_path, cctv_id, is_automation
     )
     deduped = dedupe_detections(events)
+    if message_type == "channel_batch":
+        deduped = [
+            e for e in deduped
+            if e.HasBanner and e.BoundingBox.Width > 0 and e.BoundingBox.Height > 0
+        ]
     if message_type == "vlm_image_batch" and not deduped:
         deduped = [_make_vlm_no_detection_event(cctv_id, image_path, source_image)]
     batch = ChannelDetectionBatch(
@@ -366,7 +394,23 @@ async def _run_detection_pipeline(websocket: WebSocket, ai_engine: AIInferenceSe
 
     is_automation = True
 
-    # ── 1) VLM 검증 우선 (WPF VLM 탭 대기 시간 단축) ──
+    # ── 1) CCTV 모니터링 우선: MP4 YOLO-only (channel_batch, 제출용 화면 즉시 반영) ──
+    cctv_sources = get_cctv_sources()
+    if cctv_sources:
+        print(f"[시뮬레이터] CCTV YOLO 추론 ({len(cctv_sources)}채널)")
+        for cctv_id, image_path, frame_w, frame_h in cctv_sources:
+            if not _is_automation_enabled(websocket):
+                print("[시뮬레이터] 자동화 OFF — CCTV 추론 중단")
+                return
+            try:
+                await _run_yolo_preview_and_send(
+                    websocket, ai_engine, "channel_batch",
+                    cctv_id, image_path, frame_w, frame_h,
+                )
+            except Exception as e:
+                print(f"[시뮬레이터] CCTV {cctv_id} 오류: {e}")
+
+    # ── 2) VLM 검증: WPF/image (완료 후 Feed 반영) ──
     vlm_sources = get_vlm_image_sources()
     if vlm_sources:
         print(f"[시뮬레이터] VLM 추론 ({len(vlm_sources)}장) — 완료 후에만 Feed 반영")
@@ -383,23 +427,29 @@ async def _run_detection_pipeline(websocket: WebSocket, ai_engine: AIInferenceSe
             except Exception as e:
                 print(f"[시뮬레이터] VLM {source_name} 오류: {e}")
 
-    # ── 2) CCTV 모니터링: MP4 ──
-    cctv_sources = get_cctv_sources()
-    if cctv_sources:
-        print(f"[시뮬레이터] CCTV 추론 ({len(cctv_sources)}채널)")
-        for cctv_id, image_path, frame_w, frame_h in cctv_sources:
-            if not _is_automation_enabled(websocket):
-                print("[시뮬레이터] 자동화 OFF — CCTV 추론 중단")
-                return
-            try:
-                await _run_inference_and_send(
-                    websocket, ai_engine, "channel_batch",
-                    cctv_id, image_path, frame_w, frame_h, is_automation,
-                )
-            except Exception as e:
-                print(f"[시뮬레이터] CCTV {cctv_id} 오류: {e}")
-
     print("[시뮬레이터] 1회 분석 완료 — 대기 중 (자동화 ON 시 재실행)")
+
+
+async def _analyze_cctv_at_position(websocket: WebSocket, cctv_id: str, position_ms: int) -> None:
+    """VLC 재생 시각에 맞춰 MP4 프레임 YOLO → channel_batch (LIVE 추적)."""
+    try:
+        mp4_name = CCTV_VIDEO_MAP.get(cctv_id)
+        if not mp4_name:
+            return
+
+        ai_engine = get_ai_service()
+        mp4_path = os.path.join(WPF_DIR, mp4_name)
+        frame, w, h = _read_video_frame_at_ms(mp4_path, max(0, position_ms))
+        if frame is None:
+            return
+
+        temp_path = _write_temp_jpeg(frame, f"{cctv_id}_{position_ms}")
+        await _run_yolo_preview_and_send(
+            websocket, ai_engine, "channel_batch",
+            cctv_id, temp_path, w, h,
+        )
+    except Exception as e:
+        print(f"[CCTV-Live] {cctv_id} @ {position_ms}ms 오류: {e}")
 
 
 async def run_real_ai_simulator(websocket: WebSocket):
@@ -408,6 +458,7 @@ async def run_real_ai_simulator(websocket: WebSocket):
         await wait_for_ai_service()
         ai_engine = get_ai_service()
         run_event = asyncio.Event()
+        run_event.set() # Trigger initial run
         setattr(websocket, "_pipeline_run_event", run_event)
         print("[시뮬레이터] CCTV=MP4 | VLM=WPF\\image (1회 실행, 반복 없음)")
 
@@ -445,6 +496,13 @@ async def websocket_endpoint(websocket: WebSocket):
                         print(f"[WS] 자동화 {state}")
                         if is_auto:
                             _request_pipeline_run(websocket)
+                    elif msg.get("command") == "cctv_analyze":
+                        cctv_id = msg.get("cctvId") or msg.get("cctv_id") or ""
+                        position_ms = int(msg.get("positionMs") or msg.get("position_ms") or 0)
+                        if cctv_id:
+                            asyncio.create_task(
+                                _analyze_cctv_at_position(websocket, cctv_id, position_ms)
+                            )
                     elif msg.get("command") == "human_verdict":
                         from app.services.db_service import DatabaseService
                         db = DatabaseService()

@@ -45,11 +45,11 @@ public class BannerAlert
     
     public bool IsIllegal => AiVerdict == "ILLEGAL";
     
-    public SolidColorBrush VerdictColor => AiVerdict switch
+    public string VerdictColorKey => AiVerdict switch
     {
-        "ILLEGAL" => new SolidColorBrush(Color.FromRgb(0xFF, 0x47, 0x57)), // Red
-        "LEGAL"   => new SolidColorBrush(Color.FromRgb(0x2E, 0xD5, 0x73)), // Green
-        _         => new SolidColorBrush(Color.FromRgb(0xFF, 0xA5, 0x02))  // Orange (Warning)
+        "ILLEGAL" => "#FF4757", // Red
+        "LEGAL"   => "#2ED573", // Green
+        _         => "#FFA502"  // Orange (Warning)
     };
 
     public string VerdictIcon => AiVerdict switch
