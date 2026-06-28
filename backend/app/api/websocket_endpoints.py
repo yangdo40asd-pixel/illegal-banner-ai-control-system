@@ -113,10 +113,15 @@ async def wait_for_ai_service() -> None:
     print("[시뮬레이터] AI 모델 준비 완료")
 
 WPF_DIR = r"d:\138.종합 민원 이미지 AI데이터\WPF"
-WPF_IMAGE_DIR = r"C:\Users\admin_25\Downloads\test\image"
-ASSETS_DIR = r"d:\138.종합 민원 이미지 AI데이터\BannerGuardSystem\Assets"
 
+# VLM 검증 전용 이미지 폴더 (이 경로만 사용)
+VLM_IMAGE_DIR = r"C:\Users\admin_25\Downloads\test\image"
 VLM_IMAGE_GLOBS = ("*.jpg", "*.jpeg", "*.png", "*.webp", "*.JPG", "*.JPEG", "*.PNG", "*.WEBP")
+# 우선 분석할 파일 (폴더 전체 로드 시 맨 앞 순서)
+VLM_PRIORITY_FILENAMES = (
+    "4c880145205ed9.jpg",
+    "60555e04d577fc.jpg",
+)
 
 # CCTV 모니터링 전용 — MP4 LIVE 좌표 기준
 CCTV_VIDEO_MAP = {
@@ -124,14 +129,6 @@ CCTV_VIDEO_MAP = {
     "CCTV_02": "20260525_133611.mp4",
     "CCTV_03": "20260525_133838.mp4",
     "CCTV_04": "20260525_133919.mp4",
-}
-
-# WPF/image 파일명 → 채널 매핑 (파일명 일치 시)
-CCTV_IMAGE_MAP = {
-    "CCTV_01": "20260525_133548.jpg",
-    "CCTV_02": "20260525_133609.jpg",
-    "CCTV_03": "20260525_133852.jpg",
-    "CCTV_04": "20260525_133916.jpg",
 }
 
 
@@ -245,32 +242,62 @@ def get_cctv_sources(position_ms: int = 0) -> List[Tuple[str, str, int, int]]:
     return sources
 
 
-def get_vlm_image_sources() -> List[Tuple[str, str, str, int, int]]:
-    """VLM 검증 전용 — WPF/image 폴더 jpg·png·webp 자동 수집.
-    Returns: (cctv_id, image_path, source_filename, frame_w, frame_h)
-    """
-    os.makedirs(WPF_IMAGE_DIR, exist_ok=True)
+def _list_vlm_image_files() -> List[str]:
+    """VLM 검증 이미지 목록 — VLM_IMAGE_DIR만 스캔, 우선 파일 먼저."""
+    if not os.path.isdir(VLM_IMAGE_DIR):
+        print(f"  [VLM] {VLM_IMAGE_DIR} — 폴더 없음")
+        return []
 
     files: List[str] = []
     for pattern in VLM_IMAGE_GLOBS:
-        files.extend(glob.glob(os.path.join(WPF_IMAGE_DIR, pattern)))
-    files = sorted(set(files))
+        files.extend(glob.glob(os.path.join(VLM_IMAGE_DIR, pattern)))
+    by_name = {os.path.basename(p).lower(): p for p in set(files)}
 
+    ordered: List[str] = []
+    for name in VLM_PRIORITY_FILENAMES:
+        path = by_name.get(name.lower())
+        if path:
+            ordered.append(path)
+
+    for path in sorted(by_name.values(), key=lambda p: os.path.basename(p).lower()):
+        if path not in ordered:
+            ordered.append(path)
+
+    return ordered
+
+
+def _resolve_vlm_location_address(source_image: str, image_path: str = "") -> str:
+    """VLM 이미지 파일명 → 지도용 주소."""
+    poster_map = {
+        "20260525_133548.jpg": "인천광역시 부평구 삼산동",
+        "20260525_133609.jpg": "인천광역시 부평구 삼산동",
+        "20260525_133852.jpg": "인천광역시 남동구 구월동",
+        "20260525_133916.jpg": "인천광역시 남동구 구월동",
+        "20260526_081956.jpg": "인천광역시 미추홀구 용현동",
+    }
+    base = os.path.basename(source_image or image_path).lower()
+    return poster_map.get(base, "인천광역시 미추홀구 용현동")
+
+
+def get_vlm_image_sources() -> List[Tuple[str, str, str, int, int]]:
+    """VLM 검증 전용 — VLM_IMAGE_DIR 폴더 안 이미지 전부 로드.
+    Returns: [(cctv_id, image_path, source_filename, frame_w, frame_h), ...]
+    """
+    files = _list_vlm_image_files()
     if not files:
-        print(f"  [VLM] {WPF_IMAGE_DIR} — 이미지 없음 (jpg/png/webp)")
+        print(f"  [VLM] {VLM_IMAGE_DIR} — 이미지 없음 (jpg/png/webp)")
         return []
 
     sources: List[Tuple[str, str, str, int, int]] = []
-    for i, path in enumerate(files):
+    for index, path in enumerate(files):
         basename = os.path.basename(path)
-        # 이미지마다 고유 ID — CCTV_01~04 재사용 시 Feed 항목이 덮어써지는 문제 방지
-        cctv_id = f"VLM_{i + 1:02d}"
+        cctv_id = f"VLM_{index + 1:02d}"
         _, w, h = _read_image_file(path)
         if w <= 0 or h <= 0:
             print(f"  [VLM] 읽기 실패: {basename}")
             continue
         sources.append((cctv_id, path, basename, w, h))
-        print(f"  [VLM] {basename} → {cctv_id} ({w}x{h})")
+        print(f"  [VLM] {basename} → {cctv_id} ({w}x{h}) [{index + 1}/{len(files)}]")
 
     return sources
 
@@ -289,7 +316,7 @@ def _make_vlm_no_detection_event(
     return BannerDetectionEvent(
         Id=str(uuid.uuid4()),
         CctvId=cctv_id,
-        LocationAddress=f"VLM 검증 ({source_image})",
+        LocationAddress=_resolve_vlm_location_address(source_image, image_path),
         Timestamp=datetime.now(),
         HasBanner=False,
         BoundingBox=BBox(X=0, Y=0, Width=0, Height=0),
@@ -352,7 +379,7 @@ async def _run_inference_and_send(
     source_image: str = "",
 ):
     events = await asyncio.to_thread(
-        ai_engine.run_inference_as_event, image_path, cctv_id, is_automation
+        ai_engine.run_inference_as_event, image_path, cctv_id, is_automation, source_image
     )
     deduped = dedupe_detections(events)
     if message_type == "channel_batch":
@@ -410,10 +437,10 @@ async def _run_detection_pipeline(websocket: WebSocket, ai_engine: AIInferenceSe
             except Exception as e:
                 print(f"[시뮬레이터] CCTV {cctv_id} 오류: {e}")
 
-    # ── 2) VLM 검증: WPF/image (완료 후 Feed 반영) ──
+    # ── 2) VLM 검증: test/image 폴더 전체 (완료 후 Feed 반영) ──
     vlm_sources = get_vlm_image_sources()
     if vlm_sources:
-        print(f"[시뮬레이터] VLM 추론 ({len(vlm_sources)}장) — 완료 후에만 Feed 반영")
+        print(f"[시뮬레이터] VLM 추론 ({len(vlm_sources)}장) — 폴더 전체")
         for cctv_id, image_path, source_name, frame_w, frame_h in vlm_sources:
             if not _is_automation_enabled(websocket):
                 print("[시뮬레이터] 자동화 OFF — VLM 추론 중단")
@@ -460,7 +487,7 @@ async def run_real_ai_simulator(websocket: WebSocket):
         run_event = asyncio.Event()
         run_event.set() # Trigger initial run
         setattr(websocket, "_pipeline_run_event", run_event)
-        print("[시뮬레이터] CCTV=MP4 | VLM=WPF\\image (1회 실행, 반복 없음)")
+        print(f"[시뮬레이터] CCTV=MP4 | VLM={VLM_IMAGE_DIR} (폴더 전체 자동 로드)")
 
         while True:
             await run_event.wait()

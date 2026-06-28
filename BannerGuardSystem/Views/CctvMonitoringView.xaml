@@ -192,7 +192,7 @@
                 
                 <TextBlock Grid.Row="0" Text="클릭 시 해당 CCTV 강조" FontSize="11" Foreground="#9CA3AF" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="20,0,0,8"/>
 
-                <ListBox Grid.Row="1" ItemsSource="{Binding AlertFeed}" ItemTemplate="{StaticResource LogItemTemplate}" 
+                <ListBox Grid.Row="1" ItemsSource="{Binding CctvDetectionLog}" ItemTemplate="{StaticResource LogItemTemplate}"
                          Background="Transparent" BorderThickness="0"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                          ScrollViewer.VerticalScrollBarVisibility="Auto"/>

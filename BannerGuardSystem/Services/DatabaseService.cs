@@ -93,12 +93,54 @@ public class DatabaseService : IDisposable
                 );";
             using var enfCmd = new SqliteCommand(enforcementSql, _connection);
             enfCmd.ExecuteNonQuery();
+
+            var similarSql = @"
+                CREATE TABLE IF NOT EXISTS similar_enforcement_reviews (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    source_enforcement_no TEXT NOT NULL,
+                    matched_enforcement_no TEXT NOT NULL,
+                    matched_location TEXT,
+                    matched_ocr_summary TEXT,
+                    matched_detected_at TIMESTAMP,
+                    image_similarity_pct INTEGER NOT NULL DEFAULT 0,
+                    text_similarity_pct INTEGER NOT NULL DEFAULT 0,
+                    created_at TIMESTAMP NOT NULL,
+                    UNIQUE(source_enforcement_no, matched_enforcement_no)
+                );";
+            using var simCmd = new SqliteCommand(similarSql, _connection);
+            simCmd.ExecuteNonQuery();
+
+            EnsureColumn("enforcement_records", "crop_image_b64", "TEXT");
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[DatabaseService] Init failed: {ex.Message}");
         }
     }
+
+    private void EnsureColumn(string table, string column, string type)
+    {
+        try
+        {
+            using var check = new SqliteCommand($"PRAGMA table_info({table})", _connection);
+            using var reader = check.ExecuteReader();
+            while (reader.Read())
+            {
+                if (string.Equals(reader["name"]?.ToString(), column, StringComparison.OrdinalIgnoreCase))
+                    return;
+            }
+
+            using var alter = new SqliteCommand($"ALTER TABLE {table} ADD COLUMN {column} {type}", _connection);
+            alter.ExecuteNonQuery();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[DatabaseService] EnsureColumn {table}.{column} failed: {ex.Message}");
+        }
+    }
+
+    private const int SimilarImageThresholdPct = 35;
+    private const int SimilarTextThresholdPct = 25;
 
     private void EnsureConnection()
     {
@@ -133,15 +175,19 @@ public class DatabaseService : IDisposable
             var location = EnforcementDataMapper.ResolveLocation(alert.CctvId, alert.SourceImage, alert.LocationAddress);
             var fine = EnforcementDataMapper.DefaultFineManwon(alert.StatusCode);
 
+            var cropImage = !string.IsNullOrWhiteSpace(alert.CroppedImageBase64)
+                ? alert.CroppedImageBase64
+                : alert.FullImageBase64 ?? "";
+
             var sql = @"
                 INSERT INTO enforcement_records
                 (enforcement_no, alert_id, cctv_id, source_image, detected_at, location, ocr_text,
                  ai_status_code, fine_manwon, processing_status, is_urgent, is_repeat, repeat_count,
-                 assignee, created_at, updated_at)
+                 assignee, crop_image_b64, created_at, updated_at)
                 VALUES
                 (@enforcement_no, @alert_id, @cctv_id, @source_image, @detected_at, @location, @ocr_text,
                  @ai_status_code, @fine_manwon, 'Urgent', 1, @is_repeat, @repeat_count,
-                 '배정대기', @created_at, @updated_at)";
+                 '배정대기', @crop_image_b64, @created_at, @updated_at)";
             using var cmd = new SqliteCommand(sql, _connection);
             cmd.Parameters.AddWithValue("@enforcement_no", enforcementNo);
             cmd.Parameters.AddWithValue("@alert_id", alert.Id);
@@ -154,9 +200,14 @@ public class DatabaseService : IDisposable
             cmd.Parameters.AddWithValue("@fine_manwon", fine);
             cmd.Parameters.AddWithValue("@is_repeat", alert.IsRepeatOffender ? 1 : 0);
             cmd.Parameters.AddWithValue("@repeat_count", alert.RepeatCount);
+            cmd.Parameters.AddWithValue("@crop_image_b64", cropImage);
             cmd.Parameters.AddWithValue("@created_at", now.ToString("o"));
             cmd.Parameters.AddWithValue("@updated_at", now.ToString("o"));
             cmd.ExecuteNonQuery();
+
+            if (ShouldAutoBuildSimilarReviews(alert.StatusCode))
+                BuildSimilarReviewsForEnforcement(enforcementNo);
+
             return true;
         }
         catch (Exception ex)
@@ -292,6 +343,117 @@ public class DatabaseService : IDisposable
         return kpi;
     }
 
+    private static bool ShouldAutoBuildSimilarReviews(string? aiStatusCode) =>
+        aiStatusCode is "MANUAL_REVIEW" or "ILLEGAL_COMMERCIAL" or "ILLEGAL_CONTENT";
+
+    public void BuildSimilarReviewsForEnforcement(string sourceEnforcementNo)
+    {
+        try
+        {
+            EnsureConnection();
+            var source = GetEnforcementRecordByNo(sourceEnforcementNo);
+            if (source == null)
+                return;
+
+            using var del = new SqliteCommand(
+                "DELETE FROM similar_enforcement_reviews WHERE source_enforcement_no = @source", _connection);
+            del.Parameters.AddWithValue("@source", sourceEnforcementNo);
+            del.ExecuteNonQuery();
+
+            var candidates = GetEnforcementRecords()
+                .Where(r => r.EnforcementNo != sourceEnforcementNo)
+                .Select(r => new
+                {
+                    Record = r,
+                    ImageScore = ImageSimilarityHelper.ComparePercent(source.CropImageBase64, r.CropImageBase64),
+                    TextScore = BannerSimilarityHelper.SimilarityPercent(source.OcrText, r.OcrText)
+                })
+                .Where(x => x.ImageScore >= SimilarImageThresholdPct || x.TextScore >= SimilarTextThresholdPct)
+                .OrderByDescending(x => Math.Max(x.ImageScore, x.TextScore))
+                .ThenByDescending(x => x.Record.DetectedAt)
+                .Take(20)
+                .ToList();
+
+            foreach (var item in candidates)
+            {
+                var sql = @"
+                    INSERT OR REPLACE INTO similar_enforcement_reviews
+                    (source_enforcement_no, matched_enforcement_no, matched_location, matched_ocr_summary,
+                     matched_detected_at, image_similarity_pct, text_similarity_pct, created_at)
+                    VALUES
+                    (@source, @matched, @location, @summary, @detected_at, @image_pct, @text_pct, @created_at)";
+                using var cmd = new SqliteCommand(sql, _connection);
+                cmd.Parameters.AddWithValue("@source", sourceEnforcementNo);
+                cmd.Parameters.AddWithValue("@matched", item.Record.EnforcementNo);
+                cmd.Parameters.AddWithValue("@location", item.Record.Location);
+                cmd.Parameters.AddWithValue("@summary", item.Record.BannerSummaryOneLine);
+                cmd.Parameters.AddWithValue("@detected_at", item.Record.DetectedAt.ToString("o"));
+                cmd.Parameters.AddWithValue("@image_pct", item.ImageScore);
+                cmd.Parameters.AddWithValue("@text_pct", item.TextScore);
+                cmd.Parameters.AddWithValue("@created_at", DateTime.Now.ToString("o"));
+                cmd.ExecuteNonQuery();
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[DatabaseService] BuildSimilarReviews failed: {ex.Message}");
+        }
+    }
+
+    public List<SimilarEnforcementRecord> GetSimilarEnforcementReviews(string sourceEnforcementNo)
+    {
+        var list = new List<SimilarEnforcementRecord>();
+        try
+        {
+            EnsureConnection();
+            const string sql = @"
+                SELECT matched_location, matched_ocr_summary, matched_detected_at,
+                       image_similarity_pct, text_similarity_pct
+                FROM similar_enforcement_reviews
+                WHERE source_enforcement_no = @source
+                ORDER BY image_similarity_pct DESC, text_similarity_pct DESC, id DESC";
+            using var cmd = new SqliteCommand(sql, _connection);
+            cmd.Parameters.AddWithValue("@source", sourceEnforcementNo);
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                DateTime detectedAt = DateTime.Now;
+                DateTime.TryParse(reader["matched_detected_at"]?.ToString(), out detectedAt);
+                list.Add(new SimilarEnforcementRecord
+                {
+                    DetectedDate = detectedAt,
+                    Location = reader["matched_location"]?.ToString() ?? "",
+                    BannerSummary = reader["matched_ocr_summary"]?.ToString() ?? "",
+                    ImageSimilarityPercent = Convert.ToInt32(reader["image_similarity_pct"]),
+                    TextSimilarityPercent = Convert.ToInt32(reader["text_similarity_pct"])
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[DatabaseService] GetSimilarEnforcementReviews failed: {ex.Message}");
+        }
+        return list;
+    }
+
+    private EnforcementRecord? GetEnforcementRecordByNo(string enforcementNo)
+    {
+        try
+        {
+            EnsureConnection();
+            using var cmd = new SqliteCommand(
+                "SELECT * FROM enforcement_records WHERE enforcement_no = @no LIMIT 1", _connection);
+            cmd.Parameters.AddWithValue("@no", enforcementNo);
+            using var reader = cmd.ExecuteReader();
+            return reader.Read() ? MapEnforcementRecord(reader) : null;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[DatabaseService] GetEnforcementRecordByNo failed: {ex.Message}");
+            return null;
+        }
+    }
+
     private static EnforcementRecord MapEnforcementRecord(SqliteDataReader reader)
     {
         DateTime detectedAt = DateTime.Now;
@@ -300,10 +462,14 @@ public class DatabaseService : IDisposable
         var ocrText = reader["ocr_text"]?.ToString() ?? "";
         var location = reader["location"]?.ToString() ?? "";
         var status = EnforcementDataMapper.ParseProcessingStatus(reader["processing_status"]?.ToString());
+        var aiStatus = reader["ai_status_code"]?.ToString() ?? "";
 
         return new EnforcementRecord
         {
             EnforcementNo = reader["enforcement_no"]?.ToString() ?? "",
+            AlertId = reader["alert_id"]?.ToString() ?? "",
+            AiStatusCode = aiStatus,
+            CropImageBase64 = TryGetString(reader, "crop_image_b64"),
             DetectedAt = detectedAt,
             Location = location,
             MapQuery = location,
@@ -313,6 +479,19 @@ public class DatabaseService : IDisposable
             PrimaryAction = "상세",
             SecondaryAction = status == EnforcementProcessingStatus.Urgent ? "접수" : "검토"
         };
+    }
+
+    private static string TryGetString(SqliteDataReader reader, string column)
+    {
+        try
+        {
+            var ordinal = reader.GetOrdinal(column);
+            return reader.IsDBNull(ordinal) ? "" : reader.GetString(ordinal);
+        }
+        catch
+        {
+            return "";
+        }
     }
 
     public void SaveHumanReview(

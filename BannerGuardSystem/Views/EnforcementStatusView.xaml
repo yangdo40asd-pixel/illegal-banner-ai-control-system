@@ -244,9 +244,10 @@
                             <ListView.View>
                                 <GridView>
                                     <GridViewColumn Header="일자" DisplayMemberBinding="{Binding DetectedDateText}" Width="90"/>
-                                    <GridViewColumn Header="단속위치" DisplayMemberBinding="{Binding Location}" Width="140"/>
-                                    <GridViewColumn Header="현수막 한줄요약" DisplayMemberBinding="{Binding BannerSummary}" Width="220"/>
-                                    <GridViewColumn Header="유사도" DisplayMemberBinding="{Binding SimilarityDisplay}" Width="60"/>
+                                    <GridViewColumn Header="단속위치" DisplayMemberBinding="{Binding Location}" Width="120"/>
+                                    <GridViewColumn Header="현수막 한줄요약" DisplayMemberBinding="{Binding BannerSummary}" Width="180"/>
+                                    <GridViewColumn Header="이미지유사도" DisplayMemberBinding="{Binding ImageSimilarityDisplay}" Width="80"/>
+                                    <GridViewColumn Header="텍스트유사도" DisplayMemberBinding="{Binding TextSimilarityDisplay}" Width="80"/>
                                 </GridView>
                             </ListView.View>
                         </ListView>

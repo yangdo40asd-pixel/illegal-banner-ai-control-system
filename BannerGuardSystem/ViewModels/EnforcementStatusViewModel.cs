@@ -96,8 +96,10 @@ public class EnforcementStatusViewModel : BaseViewModel
     public string SimilaritySummary => SelectedRecord == null
         ? "단속 건을 선택하면 유사 현수막을 검토합니다."
         : SimilarityRecords.Count > 0
-            ? $"선택 건과 유사한 과거 단속 {SimilarityRecords.Count}건 (내용·키워드 기준)"
-            : "유사한 과거 단속 이력이 없습니다.";
+            ? $"선택 건과 유사한 과거 단속 {SimilarityRecords.Count}건 (이미지·텍스트 유사도 기준)"
+            : SelectedRecord.NeedsSimilarityReview
+                ? "유사한 과거 단속 이력이 없습니다."
+                : "검토 대상 건이 아닙니다.";
 
     public bool HasSimilarRecords => SimilarityRecords.Count > 0;
 
@@ -154,27 +156,17 @@ public class EnforcementStatusViewModel : BaseViewModel
             return;
         }
 
-        var candidates = _allRecords
-            .Where(r => r.EnforcementNo != SelectedRecord.EnforcementNo)
-            .Select(r => new
-            {
-                Record = r,
-                Score = BannerSimilarityHelper.SimilarityPercent(SelectedRecord.OcrText, r.OcrText)
-            })
-            .Where(x => x.Score >= 25)
-            .OrderByDescending(x => x.Score)
-            .ThenByDescending(x => x.Record.DetectedAt)
-            .Take(12);
-
-        foreach (var item in candidates)
+        if (SelectedRecord.NeedsSimilarityReview)
         {
-            SimilarityRecords.Add(new SimilarEnforcementRecord
+            var saved = _db.GetSimilarEnforcementReviews(SelectedRecord.EnforcementNo);
+            if (saved.Count == 0)
             {
-                DetectedDate = item.Record.DetectedAt,
-                Location = item.Record.Location,
-                BannerSummary = item.Record.BannerSummaryOneLine,
-                SimilarityPercent = item.Score
-            });
+                _db.BuildSimilarReviewsForEnforcement(SelectedRecord.EnforcementNo);
+                saved = _db.GetSimilarEnforcementReviews(SelectedRecord.EnforcementNo);
+            }
+
+            foreach (var item in saved)
+                SimilarityRecords.Add(item);
         }
 
         NotifySimilarityProperties();
@@ -199,6 +191,13 @@ public class EnforcementStatusViewModel : BaseViewModel
     {
         if (parameter is not EnforcementRecord record) return;
         SelectedRecord = record;
+
+        if (record.SecondaryAction == "검토")
+        {
+            _db.BuildSimilarReviewsForEnforcement(record.EnforcementNo);
+            UpdateSimilarityPanel();
+        }
+
         _dialog.ShowInfo($"{record.EnforcementNoDisplay} — [{record.SecondaryAction}] 처리를 진행합니다.", "단속 처리");
     }
 
