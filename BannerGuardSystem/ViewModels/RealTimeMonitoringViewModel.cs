@@ -70,7 +70,8 @@ public class RealTimeMonitoringViewModel : BaseViewModel
                 {
                     var ch = CctvViewModel.Channels.FirstOrDefault(c => c.ChannelId == value.CctvId);
                     if (ch != null) CctvViewModel.SelectedChannel = ch;
-                    MapQuery = value.LocationAddress ?? MapQuery;
+                    _mapQuery = LocationMapHelper.ResolveMapQuery(value);
+                    OnPropertyChanged(nameof(MapQuery));
                 }
             }
         }
@@ -115,8 +116,6 @@ public class RealTimeMonitoringViewModel : BaseViewModel
             if (e.PropertyName == nameof(AlertService.PendingCount)) OnPropertyChanged(nameof(PendingCount));
             if (e.PropertyName == nameof(AlertService.CompletedCount)) OnPropertyChanged(nameof(CompletedCount));
         };
-        AlertService.VlmCompletedAlertReceived += OnVlmCompletedAlertReceived;
-
         CctvViewModel.PropertyChanged += (s, e) =>
         {
             if (e.PropertyName == nameof(CctvViewModel.SelectedChannel))
@@ -147,11 +146,6 @@ public class RealTimeMonitoringViewModel : BaseViewModel
             if (FeedFilter == "Normal") return !alert.IsEmergency;
         }
         return true;
-    }
-
-    private void OnVlmCompletedAlertReceived(BannerDetectionEventDto alert)
-    {
-        ActiveAlert = alert;
     }
 
     private void HandleVerdict(string verdict, string statusCode, string? label)

@@ -7,10 +7,17 @@ namespace BannerGuardSystem.Models;
 public class EnforcementRecord
 {
     public string EnforcementNo { get; set; } = string.Empty;
+    public string AlertId { get; set; } = string.Empty;
+    public string AiStatusCode { get; set; } = string.Empty;
+    public string CropImageBase64 { get; set; } = string.Empty;
     public DateTime DetectedAt { get; set; }
     public string Location { get; set; } = string.Empty;
     public string MapQuery { get; set; } = string.Empty;
     public string OcrText { get; set; } = string.Empty;
+
+    public bool NeedsSimilarityReview =>
+        AiStatusCode is "MANUAL_REVIEW"
+        || Status is EnforcementProcessingStatus.Appeal or EnforcementProcessingStatus.Urgent;
     public EnforcementViolationType ViolationType { get; set; }
     public EnforcementProcessingStatus Status { get; set; }
     public string PrimaryAction { get; set; } = "상세";

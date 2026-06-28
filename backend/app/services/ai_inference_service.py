@@ -1162,14 +1162,18 @@ class AIInferenceService:
         return "\n".join(lines)
 
     # ─── 핵심 추론 및 가공 파이프라인 ───
-    def _run_inference_raw(self, image_path: str, cctv_id: str = "CCTV_01", is_automation: bool = True) -> List[Dict[str, Any]]:
+    def _run_inference_raw(
+        self, image_path: str, cctv_id: str = "CCTV_01", is_automation: bool = True, source_image: str = ""
+    ) -> List[Dict[str, Any]]:
         """이미지를 읽어 YOLO + OCR을 실행하고, 판독 정확도가 낮을 경우 VLM(Qwen2.5-VL) 토론 판독을 작동시킵니다.
         또한 DB 연동 및 상습 위반 연산을 동시 처리합니다.
         """
         with self._inference_lock:
-            return self._run_inference_raw_unlocked(image_path, cctv_id, is_automation)
+            return self._run_inference_raw_unlocked(image_path, cctv_id, is_automation, source_image)
 
-    def _run_inference_raw_unlocked(self, image_path: str, cctv_id: str = "CCTV_01", is_automation: bool = True) -> List[Dict[str, Any]]:
+    def _run_inference_raw_unlocked(
+        self, image_path: str, cctv_id: str = "CCTV_01", is_automation: bool = True, source_image: str = ""
+    ) -> List[Dict[str, Any]]:
         if not is_automation:
             return []
             
@@ -1230,7 +1234,10 @@ class AIInferenceService:
             status_code = "PENDING_VLM"  # VLM 완료 전 중립 (UI 불법 오표시 방지)
             
             # 구/동/위치 매핑
-            gu, dong, full_address = self._get_cctv_location(cctv_id)
+            if cctv_id.startswith("VLM_"):
+                gu, dong, full_address = self._resolve_vlm_location(source_image or image_path)
+            else:
+                gu, dong, full_address = self._get_cctv_location(cctv_id)
 
             # 문자열 정규화 (공백 제거, 특수문자 등 제거)
             norm_text = re.sub(r'[\s\-\_\,\.\?\!\@\#\$\%\^\&\*\(\)\+]', '', ocr_text)
@@ -1490,10 +1497,10 @@ class AIInferenceService:
         yolo_results = self.yolo(img_cv, verbose=False, device=yolo_device)
         boxes = yolo_results[0].boxes
 
-        _, _, full_address = self._get_cctv_location(cctv_id)
         if cctv_id.startswith("VLM_"):
-            label = source_image or os.path.basename(image_path)
-            full_address = f"VLM 검증 ({label})"
+            _, _, full_address = self._resolve_vlm_location(source_image or image_path)
+        else:
+            _, _, full_address = self._get_cctv_location(cctv_id)
 
         if boxes is None or len(boxes) == 0:
             # CCTV LIVE: 미탐지 시 빈 배열 → WPF가 박스 제거(영상 추적)
@@ -1568,8 +1575,10 @@ class AIInferenceService:
 
         return events
 
-    def run_inference_as_event(self, image_path: str, cctv_id: str = "CCTV_01", is_automation: bool = True) -> List[BannerDetectionEvent]:
-        raw_results = self._run_inference_raw(image_path, cctv_id, is_automation)
+    def run_inference_as_event(
+        self, image_path: str, cctv_id: str = "CCTV_01", is_automation: bool = True, source_image: str = ""
+    ) -> List[BannerDetectionEvent]:
+        raw_results = self._run_inference_raw(image_path, cctv_id, is_automation, source_image)
         events: List[BannerDetectionEvent] = []
         
         for res in raw_results:
@@ -1622,3 +1631,17 @@ class AIInferenceService:
             "CCTV_05": ("서구", "청라동", "인천광역시 서구 청라동 56")
         }
         return loc_map.get(cctv_id, ("미추홀구", "용현동", "인천광역시 미추홀구 용현동"))
+
+    def _resolve_vlm_location(self, source_image: str) -> Tuple[str, str, str]:
+        """VLM 검증 이미지 파일명 → 구·동 주소 (지도 이동용)."""
+        poster_map = {
+            "20260525_133548.jpg": ("부평구", "삼산동", "인천광역시 부평구 삼산동"),
+            "20260525_133609.jpg": ("부평구", "삼산동", "인천광역시 부평구 삼산동"),
+            "20260525_133852.jpg": ("남동구", "구월동", "인천광역시 남동구 구월동"),
+            "20260525_133916.jpg": ("남동구", "구월동", "인천광역시 남동구 구월동"),
+            "20260526_081956.jpg": ("미추홀구", "용현동", "인천광역시 미추홀구 용현동"),
+        }
+        base = os.path.basename(source_image).lower()
+        if base in poster_map:
+            return poster_map[base]
+        return ("미추홀구", "용현동", "인천광역시 미추홀구 용현동")
