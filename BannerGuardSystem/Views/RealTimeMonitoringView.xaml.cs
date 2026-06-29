@@ -16,7 +16,6 @@ public partial class RealTimeMonitoringView : UserControl
         InitializeComponent();
         _vm = viewModel;
         DataContext = viewModel;
-        viewModel.PropertyChanged += Vm_PropertyChanged;
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
     }
@@ -44,6 +43,13 @@ public partial class RealTimeMonitoringView : UserControl
     {
         try
         {
+            if (_vm != null)
+            {
+                // 중복 방지를 위해 뺐다가 다시 구독
+                _vm.PropertyChanged -= Vm_PropertyChanged;
+                _vm.PropertyChanged += Vm_PropertyChanged;
+            }
+
             await MapWebView.EnsureCoreWebView2Async(null);
             if (_vm != null)
             {
@@ -66,7 +72,6 @@ public partial class RealTimeMonitoringView : UserControl
         {
             await MapWebView.EnsureCoreWebView2Async(null);
             var encoded = Uri.EscapeDataString(query);
-            // Google Maps embed는 iframe 안에서만 허용됨 (직접 Navigate 시 오류)
             var cacheBuster = DateTime.UtcNow.Ticks;
             var html =
                 "<!DOCTYPE html><html><head><meta charset='utf-8'>" +

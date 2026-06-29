@@ -29,21 +29,25 @@ public static class LocationMapHelper
         if (alert == null)
             return "인천광역시";
 
-        var fromPoster = ResolveFromPosterFile(alert.SourceImage);
-        if (fromPoster != null)
-            return fromPoster;
-
-        var fromCctv = ResolveFromCctvId(alert.CctvId);
-        if (fromCctv != null)
-            return fromCctv;
-
+        // 1순위: 명시적으로 저장된 주소 (가장 정확함)
         var fromAddress = NormalizeAddress(alert.LocationAddress);
         if (fromAddress != null)
             return fromAddress;
 
+        // 2순위: VLM 텍스트에서 추출
         var fromText = ExtractFromText(alert.VlmAnalysis, alert.OcrText);
         if (fromText != null)
             return fromText;
+
+        // 3순위: 영상 소스 파일 경로 매칭
+        var fromPoster = ResolveFromPosterFile(alert.SourceImage);
+        if (fromPoster != null)
+            return fromPoster;
+
+        // 4순위: 기본 CCTV 위치 (최후의 보루)
+        var fromCctv = ResolveFromCctvId(alert.CctvId);
+        if (fromCctv != null)
+            return fromCctv;
 
         return "인천광역시";
     }
