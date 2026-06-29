@@ -169,7 +169,9 @@
                     <Border Grid.Row="0" BorderBrush="#E5E7EB" BorderThickness="0,0,0,1" VerticalAlignment="Bottom"/>
 
                     <!-- ListBox -->
-                    <ListBox Grid.Row="1" ItemsSource="{Binding FilteredAlertFeed}" IsSynchronizedWithCurrentItem="False"
+                    <ListBox Grid.Row="1" ItemsSource="{Binding FilteredAlertFeed}"
+                             SelectedItem="{Binding ActiveAlert, Mode=TwoWay}"
+                             IsSynchronizedWithCurrentItem="False"
                              BorderThickness="0" Background="Transparent" Margin="10,10,10,10"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                         <ListBox.ItemContainerStyle>

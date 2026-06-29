@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows.Data;
 using System.ComponentModel;
+using BannerGuardSystem.Helpers;
 using BannerGuardSystem.Models;
 
 namespace BannerGuardSystem.Services;
@@ -14,7 +15,10 @@ public class AlertService : INotifyPropertyChanged
     private readonly DatabaseService _dbService;
     private readonly HashSet<string> _vlmCompletedKeys = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>VLM 검증 화면 Feed.</summary>
     public ObservableCollection<BannerDetectionEventDto> AlertFeed { get; } = new();
+    /// <summary>CCTV 모니터링 — 실시간 탐지 로그.</summary>
+    public ObservableCollection<BannerDetectionEventDto> CctvDetectionLog { get; } = new();
     public ICollectionView AlertFeedView { get; }
 
     private int _todayDetectionCount = 0;
@@ -91,41 +95,21 @@ public class AlertService : INotifyPropertyChanged
             if (batch.Detections == null || batch.Detections.Count == 0)
                 return;
 
-            var representative = batch.Detections
-                .Where(d => d.HasBanner)
+            var detections = batch.Detections
+                .Where(d => d.HasBanner && d.BoundingBox.Width > 0 && d.BoundingBox.Height > 0)
                 .OrderByDescending(d => d.Confidence)
-                .FirstOrDefault()
-                ?? batch.Detections[0];
+                .ToList();
 
-            ProcessCctvChannelAlert(representative, batch.SourceImage);
-            AlertsUpdated?.Invoke();
+            if (detections.Count == 0)
+                return;
+
+            foreach (var alertDto in detections)
+            {
+                CctvDetectionLog.Insert(0, alertDto);
+                if (CctvDetectionLog.Count > 200)
+                    CctvDetectionLog.RemoveAt(CctvDetectionLog.Count - 1);
+            }
         });
-    }
-
-    /// <summary>CCTV channel_batch — 채널당 로그 1건. LIVE 갱신 시 기존 항목만 업데이트.</summary>
-    private void ProcessCctvChannelAlert(BannerDetectionEventDto alertDto, string? sourceImage)
-    {
-        var existing = AlertFeed.FirstOrDefault(x => x.CctvId == alertDto.CctvId);
-        if (existing == null)
-        {
-            AlertFeed.Insert(0, alertDto);
-            TodayDetectionCount++;
-            PendingCount++;
-            if (AlertFeed.Count > 100)
-                AlertFeed.RemoveAt(AlertFeed.Count - 1);
-            return;
-        }
-
-        existing.BoundingBox = alertDto.BoundingBox;
-        existing.CroppedImageBase64 = alertDto.CroppedImageBase64;
-        existing.FullImageBase64 = alertDto.FullImageBase64;
-        existing.Confidence = alertDto.Confidence;
-        existing.HasBanner = alertDto.HasBanner;
-        existing.Timestamp = alertDto.Timestamp;
-        if (sourceImage != null)
-            existing.SourceImage = sourceImage;
-
-        AlertFeedView.Refresh();
     }
 
     private void OnAlertReceived(BannerDetectionEventDto alertDto)
@@ -141,21 +125,41 @@ public class AlertService : INotifyPropertyChanged
     {
         App.Current.Dispatcher.Invoke(() =>
         {
-            var vlmCompleted = batch.Detections.Where(d => d.IsVlmTriggered).ToList();
-            if (vlmCompleted.Count == 0) return;
+            if (batch.Detections == null || batch.Detections.Count == 0)
+                return;
+
+            // VLM 완료 건 우선, 없으면 미탐지 placeholder도 Feed에 표시
+            var toProcess = batch.Detections.Where(d => d.IsVlmTriggered).ToList();
+            if (toProcess.Count == 0)
+                toProcess = new List<BannerDetectionEventDto> { batch.Detections[0] };
 
             BannerDetectionEventDto? lastProcessed = null;
-            foreach (var alertDto in vlmCompleted)
+            foreach (var alertDto in toProcess)
             {
                 alertDto.SourceImage = batch.SourceImage;
+                alertDto.LocationAddress = LocationMapHelper.ResolveDisplayAddress(alertDto);
                 ProcessAlertForFeed(alertDto, false, batch.SourceImage);
                 lastProcessed = alertDto;
             }
 
+            SyncVlmKpiFromFeed();
             AlertsUpdated?.Invoke();
+            // VLM 완료 알림만 — ActiveAlert 자동 전환은 ViewModel에서 하지 않음
             if (lastProcessed != null)
                 VlmCompletedAlertReceived?.Invoke(lastProcessed);
         });
+    }
+
+    /// <summary>VLM Feed 기준 KPI 동기화 — 폴더 이미지 수와 오늘 탐지 건수 일치.</summary>
+    private void SyncVlmKpiFromFeed()
+    {
+        var vlmItems = AlertFeed
+            .Where(a => !string.IsNullOrWhiteSpace(a.SourceImage))
+            .ToList();
+
+        TodayDetectionCount = vlmItems.Count;
+        CompletedCount = vlmItems.Count(a => a.IsVlmTriggered);
+        PendingCount = vlmItems.Count(a => !a.IsVlmTriggered);
     }
 
     private void ProcessAlertForFeed(BannerDetectionEventDto alertDto, bool fromSameBatch, string? sourceImage)

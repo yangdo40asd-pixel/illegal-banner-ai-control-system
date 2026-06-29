@@ -17,7 +17,7 @@ public class CctvMonitoringViewModel : BaseViewModel
     private readonly SystemMonitorService _systemMonitor;
     public AlertService AlertService { get; }
 
-    public ObservableCollection<BannerDetectionEventDto> AlertFeed => AlertService.AlertFeed;
+    public ObservableCollection<BannerDetectionEventDto> CctvDetectionLog => AlertService.CctvDetectionLog;
 
     public ObservableCollection<CctvChannel> Channels { get; } = new();
 
