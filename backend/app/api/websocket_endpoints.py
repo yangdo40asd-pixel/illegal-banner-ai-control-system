@@ -274,6 +274,8 @@ def _resolve_vlm_location_address(source_image: str, image_path: str = "") -> st
         "20260525_133852.jpg": "인천광역시 남동구 구월동",
         "20260525_133916.jpg": "인천광역시 남동구 구월동",
         "20260526_081956.jpg": "인천광역시 미추홀구 용현동",
+        "4c880145205ed9.jpg": "인천광역시 부평구 삼산동",
+        "60555e04d577fc.jpg": "인천광역시 남동구 구월동",
     }
     base = os.path.basename(source_image or image_path).lower()
     return poster_map.get(base, "인천광역시 미추홀구 용현동")
