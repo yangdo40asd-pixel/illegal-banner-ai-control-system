@@ -1,6 +1,12 @@
 # Temporary inference frames and camera dumps (do not publish)
 temp_*.jpg
 **/temp_*.jpg
+**/_temp_*.jpg
+_임시이미지/
+
+# Temporary inference frames and camera dumps (do not publish)
+temp_*.jpg
+**/temp_*.jpg
 _임시이미지/
 
 # ============================================================
