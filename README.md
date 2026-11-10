@@ -1,68 +1,43 @@
-# 138.종합 민원 이미지 AI데이터
+# BannerGuardSystem
 
-**BannerGuardSystem** — 불법 현수막 AI 관제 WPF 데스크톱
+**불법 현수막 AI 통합 관제 시스템**
+
+CCTV와 영상에서 현수막을 탐지하고, 내용을 읽어서 불법 여부를 판정한 뒤, 데스크톱에서 실시간으로 알리고 보고서를 만드는 시스템입니다.
+
+저장소: [yangdo40asd-pixel/illegal-banner-ai-control-system](https://github.com/yangdo40asd-pixel/illegal-banner-ai-control-system)
+
+## 처리 흐름
 
 CCTV/영상 → YOLO 현수막 탐지 → Qwen2.5-VL OCR·불법 판정 → WPF 실시간 알림·목록·PDF 보고서
 
----
+## 기술 스택
 
-## 다른 PC에서 받아서 실행하기 (3단계)
-
-### 1. GitHub Desktop으로 Clone
-
-| 항목 | 값 |
-|---|---|
-| Repository | `yangdo40asd-pixel/138.-AI-` |
-| **Local path** | `D:\138.종합 민원 이미지 AI데이터` |
-
-> AI 백엔드 경로가 `D:\138.종합 민원 이미지 AI데이터`로 고정되어 있습니다.  
-> **반드시 위 경로로 clone** 하세요. (다른 경로면 AI가 모델을 못 찾습니다)
-
-### 2. 사전 설치 (한 번만)
-
-- [.NET 9 SDK](https://dotnet.microsoft.com/download)
-- Python 3.11+ 또는 Anaconda (권장: `banner_env` 환경)
-- NVIDIA GPU + CUDA 드라이버
-
-### 3. 설치 & 실행
-
-```
-setup.bat   ← 더블클릭 (패키지 설치 + WPF 빌드, 최초 1회)
-run.bat     ← 더블클릭 (프로그램 실행)
-```
-
-- WPF가 Python AI 서버(`backend/app/main.py`)를 **자동 기동**합니다.
-- **최초 AI 분석 시** Qwen2.5-VL 모델이 HuggingFace에서 자동 다운로드됩니다 (~6GB, 인터넷 필요).
-
----
+- 데스크톱: C#, WPF, .NET 9, MVVM
+- AI 서버: Python, FastAPI, WebSocket
+- 모델: YOLO, ONNX, VLM(Qwen2.5-VL)
+- 저장: SQLite
 
 ## 프로젝트 구조
 
 ```
 BannerGuardSystem/   WPF 클라이언트 (C#)
 backend/             FastAPI AI 서버 (Python)
-yolo26s/runs/.../best.pt   YOLO 탐지 모델 (Git 포함)
-inference_test/      추론 엔진·판정 규칙 문서
+yolo26s/             YOLO 탐지 모델
 ```
 
----
+학습에 사용한 원천 데이터셋은 이 저장소에 포함하지 않습니다.
 
-## 로컬에만 있는 것 (GitHub 미포함)
+## 실행 방법
 
-| 폴더 | 설명 |
-|---|---|
-| `01.데이터/` | AI 학습 원천 데이터 (~28GB) |
-| `comgong_labels.../` | YOLO 학습 데이터셋 |
-| `BannerGuardSystem/bin/` | 빌드 결과 (`setup.bat`으로 생성) |
-| `florence2/` | 구버전 모델 (미사용) |
+필요한 환경:
 
----
+- [.NET 9 SDK](https://dotnet.microsoft.com/download)
+- Python 3.11 이상
+- NVIDIA GPU와 CUDA 드라이버 (AI 추론용)
 
-## 문제 해결
+```
+setup.bat   # 패키지 설치와 WPF 빌드 (최초 1회)
+run.bat     # 프로그램 실행
+```
 
-| 증상 | 확인 |
-|---|---|
-| AI 서버 안 켜짐 | `banner_tracking.db` 옆 `backend_manager.log` 확인 |
-| 모델 못 찾음 | clone 경로가 `D:\138.종합 민원 이미지 AI데이터` 인지 확인 |
-| 빌드 실패 | .NET 9 SDK 설치 여부 확인 |
-| GPU 오류 | NVIDIA 드라이버 + CUDA, `torch` CUDA 버전 확인 |
+WPF 앱이 Python AI 서버(`backend/app/main.py`)를 함께 시작합니다. 처음 분석할 때 Qwen2.5-VL 모델이 Hugging Face에서 내려받아집니다(약 6GB, 인터넷 필요). 모델과 데이터 경로는 실행 환경에 맞게 설정해야 할 수 있습니다.
