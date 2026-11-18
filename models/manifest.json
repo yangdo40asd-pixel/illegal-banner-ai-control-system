@@ -1,0 +1,17 @@
+{
+  "yolo": {
+    "name": "YOLO26s banner detector",
+    "path": "models/yolo/best.pt",
+    "sha256": "db9aa382077bb42db1f25c7adfcdc2da1ea28a7db0a0808b1cf21f56e1d67726",
+    "architecture": "yolo26s.yaml",
+    "scale": "s",
+    "classes": {"0": "banners"},
+    "training_run": "banner_s_20260506_1909"
+  },
+  "vlm": {
+    "id": "Qwen/Qwen2.5-VL-3B-Instruct",
+    "quantization_cuda": "4-bit NF4",
+    "revision": "66285546d2b821cf421d4f5eb2576359d3770cd3",
+    "revision_note": "Verified against the local Hugging Face cache used by the GPU smoke test on 2026-11-17."
+  }
+}

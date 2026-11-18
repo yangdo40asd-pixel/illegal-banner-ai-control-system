@@ -1,0 +1,17 @@
+fastapi
+uvicorn
+pydantic
+websockets
+pillow
+numpy
+opencv-python
+ultralytics
+transformers
+qwen-vl-utils
+torch
+torchvision
+accelerate
+safetensors
+bitsandbytes
+psutil
+nvidia-ml-py

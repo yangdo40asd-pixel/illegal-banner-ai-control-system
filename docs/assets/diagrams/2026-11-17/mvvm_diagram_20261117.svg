@@ -1,0 +1,136 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="1640" viewBox="0 0 2400 1640">
+<rect width="100%" height="100%" fill="#F8FAFC"/>
+<text x="80" y="40" font-family="Malgun Gothic, sans-serif" font-size="22" font-weight="700" fill="#2563EB" text-anchor="start" dominant-baseline="text-before-edge">BANNERGUARD SYSTEM  /  TECHNICAL OVERVIEW</text>
+<text x="80" y="85" font-family="Malgun Gothic, sans-serif" font-size="58" font-weight="700" fill="#15283D" text-anchor="start" dominant-baseline="text-before-edge">MVVM 다이어그램</text>
+<text x="80" y="163" font-family="Malgun Gothic, sans-serif" font-size="27" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">실제 클래스 기준 · View는 표시, ViewModel은 상태·명령, Service는 통신·저장, Model은 데이터</text>
+<rect x="2160" y="76" width="160" height="40" rx="20" fill="#E9EEF5" stroke="#E9EEF5" stroke-width="2"/>
+<text x="2240.0" y="82" font-family="Malgun Gothic, sans-serif" font-size="22" font-weight="700" fill="#15283D" text-anchor="middle" dominant-baseline="text-before-edge">02 / 02</text>
+<rect x="80" y="236" width="2240" height="108" rx="18" fill="#15283D" stroke="#15283D" stroke-width="2"/>
+<text x="113" y="255" font-family="Malgun Gothic, sans-serif" font-size="30" font-weight="700" fill="white" text-anchor="start" dominant-baseline="text-before-edge">App.OnStartup → AppBootstrapper.Build()</text>
+<text x="113" y="302" font-family="Malgun Gothic, sans-serif" font-size="24" font-weight="400" fill="#C9D8E8" text-anchor="start" dominant-baseline="text-before-edge">DI 구성 · Shell/CCTV/VLM ViewModel 및 핵심 서비스는 Singleton · 단속/통계/설정 ViewModel은 Transient</text>
+<rect x="80" y="374" width="540" height="61" rx="14" fill="#EDF4FF" stroke="#EDF4FF" stroke-width="2"/>
+<text x="104" y="388" font-family="Malgun Gothic, sans-serif" font-size="29" font-weight="700" fill="#2563EB" text-anchor="start" dominant-baseline="text-before-edge">VIEW  ·  XAML / 화면</text>
+<rect x="760" y="374" width="620" height="61" rx="14" fill="#EBF6F3" stroke="#EBF6F3" stroke-width="2"/>
+<text x="784" y="388" font-family="Malgun Gothic, sans-serif" font-size="29" font-weight="700" fill="#007F78" text-anchor="start" dominant-baseline="text-before-edge">VIEWMODEL  ·  상태와 명령</text>
+<rect x="1530" y="374" width="790" height="61" rx="14" fill="#F2EEFA" stroke="#F2EEFA" stroke-width="2"/>
+<text x="1554" y="388" font-family="Malgun Gothic, sans-serif" font-size="29" font-weight="700" fill="#7355C7" text-anchor="start" dominant-baseline="text-before-edge">SERVICE  ·  외부 작업</text>
+<rect x="80" y="462" width="540" height="135" rx="18" fill="white" stroke="#D8E1EA" stroke-width="2"/>
+<text x="105" y="479" font-family="Malgun Gothic, sans-serif" font-size="29" font-weight="700" fill="#2563EB" text-anchor="start" dominant-baseline="text-before-edge">앱 셸 / 화면 전환</text>
+<text x="105" y="525" font-family="Malgun Gothic, sans-serif" font-size="25" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">MainWindow.xaml</text>
+<rect x="760" y="462" width="620" height="135" rx="18" fill="white" stroke="#D8E1EA" stroke-width="2"/>
+<text x="785" y="487" font-family="Malgun Gothic, sans-serif" font-size="27" font-weight="700" fill="#007F78" text-anchor="start" dominant-baseline="text-before-edge">ShellViewModel</text>
+<text x="785" y="540" font-family="Malgun Gothic, sans-serif" font-size="24" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">CurrentView · 상태바 · 탐색 명령</text>
+<rect x="1530" y="462" width="790" height="135" rx="18" fill="white" stroke="#D8E1EA" stroke-width="2"/>
+<text x="1556" y="479" font-family="Malgun Gothic, sans-serif" font-size="26" font-weight="400" fill="#15283D" text-anchor="start" dominant-baseline="text-before-edge">INavigationService → NavigationService</text>
+<text x="1556" y="516" font-family="Malgun Gothic, sans-serif" font-size="26" font-weight="400" fill="#15283D" text-anchor="start" dominant-baseline="text-before-edge">SystemMonitorService</text>
+<text x="1556" y="561" font-family="Malgun Gothic, sans-serif" font-size="23" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">화면 캐시·탐색 / 연결 및 자원 상태</text>
+<polyline points="620,512 760,512" fill="none" stroke="#2563EB" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="760,512 747.0,506.0 747.0,518.0" fill="#2563EB"/>
+<polyline points="760,559 620,559" fill="none" stroke="#007F78" stroke-width="3" stroke-linejoin="round" stroke-dasharray="8 7"/>
+<polygon points="620,559 633.0,565.0 633.0,553.0" fill="#007F78"/>
+<text x="690.0" y="483" font-family="Malgun Gothic, sans-serif" font-size="18" font-weight="400" fill="#2563EB" text-anchor="middle" dominant-baseline="text-before-edge">Command</text>
+<text x="690.0" y="567" font-family="Malgun Gothic, sans-serif" font-size="18" font-weight="400" fill="#007F78" text-anchor="middle" dominant-baseline="text-before-edge">Binding</text>
+<polyline points="1380,512 1530,512" fill="none" stroke="#7355C7" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="1530,512 1517.0,506.0 1517.0,518.0" fill="#7355C7"/>
+<text x="1455.0" y="483" font-family="Malgun Gothic, sans-serif" font-size="19" font-weight="400" fill="#7355C7" text-anchor="middle" dominant-baseline="text-before-edge">호출 / 구독</text>
+<polyline points="1530,559 1380,559" fill="none" stroke="#7355C7" stroke-width="3" stroke-linejoin="round" stroke-dasharray="8 7"/>
+<polygon points="1380,559 1393.0,565.0 1393.0,553.0" fill="#7355C7"/>
+<text x="1455.0" y="567" font-family="Malgun Gothic, sans-serif" font-size="18" font-weight="400" fill="#7355C7" text-anchor="middle" dominant-baseline="text-before-edge">결과 / 이벤트</text>
+<rect x="80" y="622" width="540" height="135" rx="18" fill="white" stroke="#D8E1EA" stroke-width="2"/>
+<text x="105" y="639" font-family="Malgun Gothic, sans-serif" font-size="29" font-weight="700" fill="#2563EB" text-anchor="start" dominant-baseline="text-before-edge">CCTV 모니터링</text>
+<text x="105" y="685" font-family="Malgun Gothic, sans-serif" font-size="25" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">CctvMonitoringView.xaml</text>
+<rect x="760" y="622" width="620" height="135" rx="18" fill="white" stroke="#D8E1EA" stroke-width="2"/>
+<text x="785" y="647" font-family="Malgun Gothic, sans-serif" font-size="27" font-weight="700" fill="#007F78" text-anchor="start" dominant-baseline="text-before-edge">CctvMonitoringViewModel</text>
+<text x="785" y="700" font-family="Malgun Gothic, sans-serif" font-size="24" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">Channels · SelectedChannel · 분석 요청</text>
+<rect x="1530" y="622" width="790" height="135" rx="18" fill="white" stroke="#D8E1EA" stroke-width="2"/>
+<text x="1556" y="639" font-family="Malgun Gothic, sans-serif" font-size="26" font-weight="400" fill="#15283D" text-anchor="start" dominant-baseline="text-before-edge">WebSocketService · AlertService</text>
+<text x="1556" y="676" font-family="Malgun Gothic, sans-serif" font-size="26" font-weight="400" fill="#15283D" text-anchor="start" dominant-baseline="text-before-edge">SystemMonitorService</text>
+<text x="1556" y="721" font-family="Malgun Gothic, sans-serif" font-size="23" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">channel_batch → 채널 및 탐지 로그</text>
+<polyline points="620,672 760,672" fill="none" stroke="#2563EB" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="760,672 747.0,666.0 747.0,678.0" fill="#2563EB"/>
+<polyline points="760,719 620,719" fill="none" stroke="#007F78" stroke-width="3" stroke-linejoin="round" stroke-dasharray="8 7"/>
+<polygon points="620,719 633.0,725.0 633.0,713.0" fill="#007F78"/>
+<text x="690.0" y="643" font-family="Malgun Gothic, sans-serif" font-size="18" font-weight="400" fill="#2563EB" text-anchor="middle" dominant-baseline="text-before-edge">Command</text>
+<text x="690.0" y="727" font-family="Malgun Gothic, sans-serif" font-size="18" font-weight="400" fill="#007F78" text-anchor="middle" dominant-baseline="text-before-edge">Binding</text>
+<polyline points="1380,672 1530,672" fill="none" stroke="#7355C7" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="1530,672 1517.0,666.0 1517.0,678.0" fill="#7355C7"/>
+<text x="1455.0" y="643" font-family="Malgun Gothic, sans-serif" font-size="19" font-weight="400" fill="#7355C7" text-anchor="middle" dominant-baseline="text-before-edge">호출 / 구독</text>
+<polyline points="1530,719 1380,719" fill="none" stroke="#7355C7" stroke-width="3" stroke-linejoin="round" stroke-dasharray="8 7"/>
+<polygon points="1380,719 1393.0,725.0 1393.0,713.0" fill="#7355C7"/>
+<text x="1455.0" y="727" font-family="Malgun Gothic, sans-serif" font-size="18" font-weight="400" fill="#7355C7" text-anchor="middle" dominant-baseline="text-before-edge">결과 / 이벤트</text>
+<rect x="80" y="782" width="540" height="135" rx="18" fill="white" stroke="#D8E1EA" stroke-width="2"/>
+<text x="105" y="799" font-family="Malgun Gothic, sans-serif" font-size="29" font-weight="700" fill="#2563EB" text-anchor="start" dominant-baseline="text-before-edge">VLM 검증</text>
+<text x="105" y="845" font-family="Malgun Gothic, sans-serif" font-size="25" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">RealTimeMonitoringView.xaml</text>
+<rect x="760" y="782" width="620" height="135" rx="18" fill="white" stroke="#D8E1EA" stroke-width="2"/>
+<text x="785" y="807" font-family="Malgun Gothic, sans-serif" font-size="27" font-weight="700" fill="#007F78" text-anchor="start" dominant-baseline="text-before-edge">RealTimeMonitoringViewModel</text>
+<text x="785" y="860" font-family="Malgun Gothic, sans-serif" font-size="24" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">ActiveAlert · Feed 필터 · 사람 판정</text>
+<rect x="1530" y="782" width="790" height="135" rx="18" fill="white" stroke="#D8E1EA" stroke-width="2"/>
+<text x="1556" y="799" font-family="Malgun Gothic, sans-serif" font-size="26" font-weight="400" fill="#15283D" text-anchor="start" dominant-baseline="text-before-edge">AlertService · WebSocketService</text>
+<text x="1556" y="836" font-family="Malgun Gothic, sans-serif" font-size="26" font-weight="400" fill="#15283D" text-anchor="start" dominant-baseline="text-before-edge">DatabaseService</text>
+<text x="1556" y="881" font-family="Malgun Gothic, sans-serif" font-size="23" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">vlm_image_batch → Feed / 판정 저장</text>
+<polyline points="620,832 760,832" fill="none" stroke="#2563EB" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="760,832 747.0,826.0 747.0,838.0" fill="#2563EB"/>
+<polyline points="760,879 620,879" fill="none" stroke="#007F78" stroke-width="3" stroke-linejoin="round" stroke-dasharray="8 7"/>
+<polygon points="620,879 633.0,885.0 633.0,873.0" fill="#007F78"/>
+<text x="690.0" y="803" font-family="Malgun Gothic, sans-serif" font-size="18" font-weight="400" fill="#2563EB" text-anchor="middle" dominant-baseline="text-before-edge">Command</text>
+<text x="690.0" y="887" font-family="Malgun Gothic, sans-serif" font-size="18" font-weight="400" fill="#007F78" text-anchor="middle" dominant-baseline="text-before-edge">Binding</text>
+<polyline points="1380,832 1530,832" fill="none" stroke="#7355C7" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="1530,832 1517.0,826.0 1517.0,838.0" fill="#7355C7"/>
+<text x="1455.0" y="803" font-family="Malgun Gothic, sans-serif" font-size="19" font-weight="400" fill="#7355C7" text-anchor="middle" dominant-baseline="text-before-edge">호출 / 구독</text>
+<polyline points="1530,879 1380,879" fill="none" stroke="#7355C7" stroke-width="3" stroke-linejoin="round" stroke-dasharray="8 7"/>
+<polygon points="1380,879 1393.0,885.0 1393.0,873.0" fill="#7355C7"/>
+<text x="1455.0" y="887" font-family="Malgun Gothic, sans-serif" font-size="18" font-weight="400" fill="#7355C7" text-anchor="middle" dominant-baseline="text-before-edge">결과 / 이벤트</text>
+<rect x="80" y="942" width="540" height="135" rx="18" fill="white" stroke="#D8E1EA" stroke-width="2"/>
+<text x="105" y="959" font-family="Malgun Gothic, sans-serif" font-size="29" font-weight="700" fill="#2563EB" text-anchor="start" dominant-baseline="text-before-edge">단속 처리 현황</text>
+<text x="105" y="1005" font-family="Malgun Gothic, sans-serif" font-size="25" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">EnforcementStatusView.xaml</text>
+<rect x="760" y="942" width="620" height="135" rx="18" fill="white" stroke="#D8E1EA" stroke-width="2"/>
+<text x="785" y="967" font-family="Malgun Gothic, sans-serif" font-size="27" font-weight="700" fill="#007F78" text-anchor="start" dominant-baseline="text-before-edge">EnforcementStatusViewModel</text>
+<text x="785" y="1020" font-family="Malgun Gothic, sans-serif" font-size="24" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">Records · 검색 · 접수/검토 · 보고서</text>
+<rect x="1530" y="942" width="790" height="135" rx="18" fill="white" stroke="#D8E1EA" stroke-width="2"/>
+<text x="1556" y="959" font-family="Malgun Gothic, sans-serif" font-size="26" font-weight="400" fill="#15283D" text-anchor="start" dominant-baseline="text-before-edge">DatabaseService · PdfReportService</text>
+<text x="1556" y="996" font-family="Malgun Gothic, sans-serif" font-size="26" font-weight="400" fill="#15283D" text-anchor="start" dominant-baseline="text-before-edge">IDialogService → WpfDialogService</text>
+<text x="1556" y="1041" font-family="Malgun Gothic, sans-serif" font-size="23" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">단속 목록·처리 상태 / PDF·Excel</text>
+<polyline points="620,992 760,992" fill="none" stroke="#2563EB" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="760,992 747.0,986.0 747.0,998.0" fill="#2563EB"/>
+<polyline points="760,1039 620,1039" fill="none" stroke="#007F78" stroke-width="3" stroke-linejoin="round" stroke-dasharray="8 7"/>
+<polygon points="620,1039 633.0,1045.0 633.0,1033.0" fill="#007F78"/>
+<text x="690.0" y="963" font-family="Malgun Gothic, sans-serif" font-size="18" font-weight="400" fill="#2563EB" text-anchor="middle" dominant-baseline="text-before-edge">Command</text>
+<text x="690.0" y="1047" font-family="Malgun Gothic, sans-serif" font-size="18" font-weight="400" fill="#007F78" text-anchor="middle" dominant-baseline="text-before-edge">Binding</text>
+<polyline points="1380,992 1530,992" fill="none" stroke="#7355C7" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="1530,992 1517.0,986.0 1517.0,998.0" fill="#7355C7"/>
+<text x="1455.0" y="963" font-family="Malgun Gothic, sans-serif" font-size="19" font-weight="400" fill="#7355C7" text-anchor="middle" dominant-baseline="text-before-edge">호출 / 구독</text>
+<polyline points="1530,1039 1380,1039" fill="none" stroke="#7355C7" stroke-width="3" stroke-linejoin="round" stroke-dasharray="8 7"/>
+<polygon points="1380,1039 1393.0,1045.0 1393.0,1033.0" fill="#7355C7"/>
+<text x="1455.0" y="1047" font-family="Malgun Gothic, sans-serif" font-size="18" font-weight="400" fill="#7355C7" text-anchor="middle" dominant-baseline="text-before-edge">결과 / 이벤트</text>
+<rect x="80" y="1102" width="540" height="158" rx="18" fill="white" stroke="#D8E1EA" stroke-width="2"/>
+<text x="105" y="1119" font-family="Malgun Gothic, sans-serif" font-size="29" font-weight="700" fill="#2563EB" text-anchor="start" dominant-baseline="text-before-edge">통계/리포트 · 데이터 관리</text>
+<text x="105" y="1165" font-family="Malgun Gothic, sans-serif" font-size="25" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">StatisticsReportView.xaml</text>
+<text x="105" y="1199" font-family="Malgun Gothic, sans-serif" font-size="25" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">SystemSettingsView.xaml</text>
+<rect x="760" y="1102" width="620" height="158" rx="18" fill="white" stroke="#D8E1EA" stroke-width="2"/>
+<text x="785" y="1127" font-family="Malgun Gothic, sans-serif" font-size="27" font-weight="700" fill="#007F78" text-anchor="start" dominant-baseline="text-before-edge">StatisticsReportViewModel</text>
+<text x="785" y="1180" font-family="Malgun Gothic, sans-serif" font-size="24" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">SystemSettingsViewModel</text>
+<rect x="1530" y="1102" width="790" height="158" rx="18" fill="white" stroke="#D8E1EA" stroke-width="2"/>
+<text x="1556" y="1119" font-family="Malgun Gothic, sans-serif" font-size="26" font-weight="400" fill="#15283D" text-anchor="start" dominant-baseline="text-before-edge">IStatisticsRepository · ISettingsRepository</text>
+<text x="1556" y="1156" font-family="Malgun Gothic, sans-serif" font-size="26" font-weight="400" fill="#15283D" text-anchor="start" dominant-baseline="text-before-edge">IStatisticsExcelExportService · IDialogService</text>
+<text x="1556" y="1201" font-family="Malgun Gothic, sans-serif" font-size="23" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">SQLite 통계 / JSON 설정 / Excel 출력</text>
+<polyline points="620,1152 760,1152" fill="none" stroke="#2563EB" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="760,1152 747.0,1146.0 747.0,1158.0" fill="#2563EB"/>
+<polyline points="760,1199 620,1199" fill="none" stroke="#007F78" stroke-width="3" stroke-linejoin="round" stroke-dasharray="8 7"/>
+<polygon points="620,1199 633.0,1205.0 633.0,1193.0" fill="#007F78"/>
+<text x="690.0" y="1123" font-family="Malgun Gothic, sans-serif" font-size="18" font-weight="400" fill="#2563EB" text-anchor="middle" dominant-baseline="text-before-edge">Command</text>
+<text x="690.0" y="1207" font-family="Malgun Gothic, sans-serif" font-size="18" font-weight="400" fill="#007F78" text-anchor="middle" dominant-baseline="text-before-edge">Binding</text>
+<polyline points="1380,1152 1530,1152" fill="none" stroke="#7355C7" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="1530,1152 1517.0,1146.0 1517.0,1158.0" fill="#7355C7"/>
+<text x="1455.0" y="1123" font-family="Malgun Gothic, sans-serif" font-size="19" font-weight="400" fill="#7355C7" text-anchor="middle" dominant-baseline="text-before-edge">호출 / 구독</text>
+<polyline points="1530,1199 1380,1199" fill="none" stroke="#7355C7" stroke-width="3" stroke-linejoin="round" stroke-dasharray="8 7"/>
+<polygon points="1380,1199 1393.0,1205.0 1393.0,1193.0" fill="#7355C7"/>
+<text x="1455.0" y="1207" font-family="Malgun Gothic, sans-serif" font-size="18" font-weight="400" fill="#7355C7" text-anchor="middle" dominant-baseline="text-before-edge">결과 / 이벤트</text>
+<rect x="80" y="1311" width="2240" height="177" rx="20" fill="#FFF7E9" stroke="#E8D4AF" stroke-width="2"/>
+<text x="110" y="1332" font-family="Malgun Gothic, sans-serif" font-size="29" font-weight="700" fill="#A96B16" text-anchor="start" dominant-baseline="text-before-edge">MODEL / DTO  ·  ViewModel과 Service가 사용하는 데이터 타입</text>
+<text x="110" y="1386" font-family="Malgun Gothic, sans-serif" font-size="26" font-weight="400" fill="#15283D" text-anchor="start" dominant-baseline="text-before-edge">CCTV: CctvChannel · ChannelDetectionBatchDto     |     VLM: BannerDetectionEventDto</text>
+<text x="110" y="1431" font-family="Malgun Gothic, sans-serif" font-size="25" font-weight="400" fill="#15283D" text-anchor="start" dominant-baseline="text-before-edge">단속: EnforcementRecord · SimilarEnforcementRecord     |     통계/설정: StatisticsReportData · SystemSettingsRoot</text>
+<text x="80" y="1511" font-family="Malgun Gothic, sans-serif" font-size="23" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">변경 전달: INotifyPropertyChanged · ObservableCollection   |   UI 명령: RelayCommand / SimpleCommand   |   오버레이: DependencyProperty</text>
+<polyline points="80,1565 2320,1565" fill="none" stroke="#D8E1EA" stroke-width="2" stroke-linejoin="round"/>
+<text x="80" y="1590" font-family="Malgun Gothic, sans-serif" font-size="22" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">CctvChannelControl · YoloBBoxOverlay는 View 구성요소   ·   BackendManager는 App 시작/종료에서 호출   ·   서비스는 행별로 중복 표기</text>
+<text x="2320" y="1590" font-family="Malgun Gothic, sans-serif" font-size="22" font-weight="400" fill="#51647A" text-anchor="middle" dominant-baseline="text-before-edge">2026.11.17</text>
+</svg>

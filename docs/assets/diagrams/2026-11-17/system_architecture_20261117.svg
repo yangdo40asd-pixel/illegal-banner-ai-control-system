@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="1640" viewBox="0 0 2400 1640">
+<rect width="100%" height="100%" fill="#F8FAFC"/>
+<text x="80" y="40" font-family="Malgun Gothic, sans-serif" font-size="22" font-weight="700" fill="#2563EB" text-anchor="start" dominant-baseline="text-before-edge">BANNERGUARD SYSTEM  /  TECHNICAL OVERVIEW</text>
+<text x="80" y="85" font-family="Malgun Gothic, sans-serif" font-size="58" font-weight="700" fill="#15283D" text-anchor="start" dominant-baseline="text-before-edge">시스템 아키텍처</text>
+<text x="80" y="163" font-family="Malgun Gothic, sans-serif" font-size="27" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">현재 구현 기준 · WPF 클라이언트, FastAPI 서버, GPU 추론 및 데이터 저장 흐름</text>
+<rect x="2160" y="76" width="160" height="40" rx="20" fill="#E9EEF5" stroke="#E9EEF5" stroke-width="2"/>
+<text x="2240.0" y="82" font-family="Malgun Gothic, sans-serif" font-size="22" font-weight="700" fill="#15283D" text-anchor="middle" dominant-baseline="text-before-edge">01 / 02</text>
+<rect x="80" y="325" width="760" height="800" rx="24" fill="#EDF4FF" stroke="#C3D6F5" stroke-width="2"/>
+<rect x="1490" y="325" width="830" height="800" rx="24" fill="#EBF6F3" stroke="#BDDED5" stroke-width="2"/>
+<text x="112" y="351" font-family="Malgun Gothic, sans-serif" font-size="36" font-weight="700" fill="#2563EB" text-anchor="start" dominant-baseline="text-before-edge">WPF 클라이언트</text>
+<text x="112" y="403" font-family="Malgun Gothic, sans-serif" font-size="25" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">C# · .NET 9 · 관제 화면 프로세스</text>
+<text x="1522" y="351" font-family="Malgun Gothic, sans-serif" font-size="36" font-weight="700" fill="#007F78" text-anchor="start" dominant-baseline="text-before-edge">Python AI 서버</text>
+<text x="1522" y="403" font-family="Malgun Gothic, sans-serif" font-size="25" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">FastAPI · Uvicorn · 포트 8000</text>
+<polyline points="460,325 460,267 1905,267 1905,325" fill="none" stroke="#7355C7" stroke-width="3" stroke-linejoin="round" stroke-dasharray="8 7"/>
+<polygon points="1905,325 1911.0,312.0 1899.0,312.0" fill="#7355C7"/>
+<rect x="715" y="237" width="945" height="57" rx="8" fill="#F8FAFC" stroke="#F8FAFC" stroke-width="2"/>
+<text x="1187" y="246" font-family="Malgun Gothic, sans-serif" font-size="25" font-weight="700" fill="#7355C7" text-anchor="middle" dominant-baseline="text-before-edge">BackendManager · 서버 재사용 또는 자식 프로세스 실행·종료</text>
+<rect x="110" y="460" width="700" height="142" rx="18" fill="white" stroke="#D8E1EA" stroke-width="2"/>
+<rect x="128" y="482" width="6" height="98" rx="3" fill="#2563EB" stroke="#2563EB" stroke-width="2"/>
+<text x="152" y="482" font-family="Malgun Gothic, sans-serif" font-size="30" font-weight="700" fill="#2563EB" text-anchor="start" dominant-baseline="text-before-edge">관제 화면</text>
+<text x="152" y="530" font-family="Malgun Gothic, sans-serif" font-size="25" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">CCTV 모니터링 · VLM 검증 · 단속 처리</text>
+<text x="152" y="567" font-family="Malgun Gothic, sans-serif" font-size="25" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">통계/리포트 · 데이터 관리</text>
+<rect x="110" y="625" width="700" height="130" rx="18" fill="white" stroke="#D8E1EA" stroke-width="2"/>
+<rect x="128" y="647" width="6" height="86" rx="3" fill="#2563EB" stroke="#2563EB" stroke-width="2"/>
+<text x="152" y="647" font-family="Malgun Gothic, sans-serif" font-size="30" font-weight="700" fill="#2563EB" text-anchor="start" dominant-baseline="text-before-edge">영상 재생 및 오버레이</text>
+<text x="152" y="695" font-family="Malgun Gothic, sans-serif" font-size="25" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">LibVLCSharp · MP4 재생 / YOLO 박스 표시</text>
+<rect x="110" y="778" width="700" height="175" rx="18" fill="white" stroke="#D8E1EA" stroke-width="2"/>
+<rect x="128" y="800" width="6" height="131" rx="3" fill="#2563EB" stroke="#2563EB" stroke-width="2"/>
+<text x="152" y="800" font-family="Malgun Gothic, sans-serif" font-size="30" font-weight="700" fill="#2563EB" text-anchor="start" dominant-baseline="text-before-edge">통신 및 화면 상태 서비스</text>
+<text x="152" y="848" font-family="Malgun Gothic, sans-serif" font-size="25" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">WebSocketService → AlertService → ViewModel</text>
+<text x="152" y="885" font-family="Malgun Gothic, sans-serif" font-size="25" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">SystemMonitorService · /health 주기 조회</text>
+<rect x="110" y="976" width="700" height="118" rx="18" fill="white" stroke="#D8E1EA" stroke-width="2"/>
+<rect x="128" y="998" width="6" height="74" rx="3" fill="#2563EB" stroke="#2563EB" stroke-width="2"/>
+<text x="152" y="998" font-family="Malgun Gothic, sans-serif" font-size="29" font-weight="700" fill="#2563EB" text-anchor="start" dominant-baseline="text-before-edge">데이터 및 보고서</text>
+<text x="152" y="1046" font-family="Malgun Gothic, sans-serif" font-size="25" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">DatabaseService · PDF · Excel</text>
+<rect x="1520" y="460" width="770" height="142" rx="18" fill="white" stroke="#D8E1EA" stroke-width="2"/>
+<rect x="1538" y="482" width="6" height="98" rx="3" fill="#007F78" stroke="#007F78" stroke-width="2"/>
+<text x="1562" y="482" font-family="Malgun Gothic, sans-serif" font-size="30" font-weight="700" fill="#007F78" text-anchor="start" dominant-baseline="text-before-edge">API / WebSocket 라우터</text>
+<text x="1562" y="530" font-family="Malgun Gothic, sans-serif" font-size="25" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">/ws/alerts · 결과 전송 및 명령 수신</text>
+<text x="1562" y="567" font-family="Malgun Gothic, sans-serif" font-size="25" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">/health · 모델 준비 여부 및 하드웨어 상태</text>
+<rect x="1520" y="625" width="770" height="218" rx="18" fill="white" stroke="#D8E1EA" stroke-width="2"/>
+<rect x="1538" y="647" width="6" height="174" rx="3" fill="#007F78" stroke="#007F78" stroke-width="2"/>
+<text x="1562" y="647" font-family="Malgun Gothic, sans-serif" font-size="30" font-weight="700" fill="#007F78" text-anchor="start" dominant-baseline="text-before-edge">AIInferenceService</text>
+<text x="1562" y="695" font-family="Malgun Gothic, sans-serif" font-size="25" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">CCTV: YOLO26s → 현수막 박스·신뢰도</text>
+<text x="1562" y="732" font-family="Malgun Gothic, sans-serif" font-size="25" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">VLM: YOLO26s → 크롭 → Qwen2.5-VL-3B</text>
+<text x="1562" y="769" font-family="Malgun Gothic, sans-serif" font-size="25" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">문자·맥락 분석 → 상태코드 / 판정 결과</text>
+<rect x="1520" y="866" width="770" height="118" rx="18" fill="white" stroke="#D8E1EA" stroke-width="2"/>
+<rect x="1538" y="888" width="6" height="74" rx="3" fill="#007F78" stroke="#007F78" stroke-width="2"/>
+<text x="1562" y="888" font-family="Malgun Gothic, sans-serif" font-size="29" font-weight="700" fill="#007F78" text-anchor="start" dominant-baseline="text-before-edge">추론 실행 환경</text>
+<text x="1562" y="936" font-family="Malgun Gothic, sans-serif" font-size="25" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">PyTorch CUDA · VLM 4-bit / CUDA 없으면 CPU</text>
+<rect x="1520" y="1007" width="770" height="87" rx="18" fill="white" stroke="#D8E1EA" stroke-width="2"/>
+<rect x="1538" y="1029" width="6" height="43" rx="3" fill="#007F78" stroke="#007F78" stroke-width="2"/>
+<text x="1562" y="1029" font-family="Malgun Gothic, sans-serif" font-size="28" font-weight="700" fill="#007F78" text-anchor="start" dominant-baseline="text-before-edge">상태 수집: psutil · NVML</text>
+<rect x="953" y="351" width="424" height="40" rx="20" fill="#E9EEF5" stroke="#E9EEF5" stroke-width="2"/>
+<text x="1165.0" y="357" font-family="Malgun Gothic, sans-serif" font-size="22" font-weight="700" fill="#15283D" text-anchor="middle" dominant-baseline="text-before-edge">동일 PC · localhost 통신</text>
+<text x="1165" y="438" font-family="Malgun Gothic, sans-serif" font-size="27" font-weight="700" fill="#2563EB" text-anchor="middle" dominant-baseline="text-before-edge">분석 요청 / 관제 명령</text>
+<text x="1165" y="481" font-family="Malgun Gothic, sans-serif" font-size="22" font-weight="400" fill="#51647A" text-anchor="middle" dominant-baseline="text-before-edge">cctv_analyze · toggle_automation</text>
+<text x="1165" y="515" font-family="Malgun Gothic, sans-serif" font-size="22" font-weight="400" fill="#51647A" text-anchor="middle" dominant-baseline="text-before-edge">human_verdict</text>
+<polyline points="840,569 1490,569" fill="none" stroke="#2563EB" stroke-width="4" stroke-linejoin="round"/>
+<polygon points="1490,569 1477.0,563.0 1477.0,575.0" fill="#2563EB"/>
+<text x="1165" y="665" font-family="Malgun Gothic, sans-serif" font-size="27" font-weight="700" fill="#007F78" text-anchor="middle" dominant-baseline="text-before-edge">분석 결과 · JSON + 이미지</text>
+<text x="1165" y="709" font-family="Malgun Gothic, sans-serif" font-size="23" font-weight="400" fill="#51647A" text-anchor="middle" dominant-baseline="text-before-edge">channel_batch / vlm_image_batch</text>
+<polyline points="1490,766 840,766" fill="none" stroke="#007F78" stroke-width="4" stroke-linejoin="round"/>
+<polygon points="840,766 853.0,772.0 853.0,760.0" fill="#007F78"/>
+<text x="1165" y="865" font-family="Malgun Gothic, sans-serif" font-size="27" font-weight="700" fill="#7355C7" text-anchor="middle" dominant-baseline="text-before-edge">HTTP GET /health</text>
+<text x="1165" y="908" font-family="Malgun Gothic, sans-serif" font-size="22" font-weight="400" fill="#51647A" text-anchor="middle" dominant-baseline="text-before-edge">AI 준비 상태 · GPU / VRAM · 서버 자원</text>
+<polyline points="840,958 1490,958" fill="none" stroke="#7355C7" stroke-width="3" stroke-linejoin="round" stroke-dasharray="8 7"/>
+<polygon points="1490,958 1477.0,952.0 1477.0,964.0" fill="#7355C7"/>
+<polygon points="840,958 853.0,964.0 853.0,952.0" fill="#7355C7"/>
+<text x="1165" y="1040" font-family="Malgun Gothic, sans-serif" font-size="21" font-weight="400" fill="#51647A" text-anchor="middle" dominant-baseline="text-before-edge">WebSocket: ws://localhost:8000/ws/alerts</text>
+<polyline points="460,1195 460,1125" fill="none" stroke="#2563EB" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="460,1125 454.0,1138.0 466.0,1138.0" fill="#2563EB"/>
+<text x="465" y="1146" font-family="Malgun Gothic, sans-serif" font-size="22" font-weight="400" fill="#2563EB" text-anchor="start" dominant-baseline="text-before-edge"> 영상 재생</text>
+<rect x="80" y="1195" width="760" height="225" rx="18" fill="white" stroke="#D8E1EA" stroke-width="2"/>
+<rect x="98" y="1217" width="6" height="181" rx="3" fill="#2563EB" stroke="#2563EB" stroke-width="2"/>
+<text x="122" y="1217" font-family="Malgun Gothic, sans-serif" font-size="30" font-weight="700" fill="#2563EB" text-anchor="start" dominant-baseline="text-before-edge">로컬 영상 · 설정된 미디어 폴더</text>
+<text x="122" y="1265" font-family="Malgun Gothic, sans-serif" font-size="25" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">MP4 4채널 · 관제 화면에서 반복 재생</text>
+<text x="122" y="1302" font-family="Malgun Gothic, sans-serif" font-size="25" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">재생 위치(ms)를 서버 분석 요청에 포함</text>
+<text x="122" y="1339" font-family="Malgun Gothic, sans-serif" font-size="25" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">현재 구성은 로컬 영상 기반 데모</text>
+<polyline points="1905,1195 1905,1125" fill="none" stroke="#007F78" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="1905,1125 1899.0,1138.0 1911.0,1138.0" fill="#007F78"/>
+<text x="1910" y="1146" font-family="Malgun Gothic, sans-serif" font-size="22" font-weight="400" fill="#007F78" text-anchor="start" dominant-baseline="text-before-edge"> 프레임·이미지 로드</text>
+<rect x="1490" y="1195" width="830" height="225" rx="18" fill="white" stroke="#D8E1EA" stroke-width="2"/>
+<rect x="1508" y="1217" width="6" height="181" rx="3" fill="#007F78" stroke="#007F78" stroke-width="2"/>
+<text x="1532" y="1217" font-family="Malgun Gothic, sans-serif" font-size="30" font-weight="700" fill="#007F78" text-anchor="start" dominant-baseline="text-before-edge">서버 분석 입력</text>
+<text x="1532" y="1265" font-family="Malgun Gothic, sans-serif" font-size="25" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">OpenCV → 같은 MP4의 지정 시각 프레임 추출</text>
+<text x="1532" y="1302" font-family="Malgun Gothic, sans-serif" font-size="25" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">설정된 VLM 이미지 폴더 → 원본 입력</text>
+<text x="1532" y="1339" font-family="Malgun Gothic, sans-serif" font-size="25" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">CCTV: 화면 진입 후 주기 요청 / VLM: 1회 배치</text>
+<rect x="900" y="1195" width="530" height="225" rx="22" fill="#FFF7E9" stroke="#E8D4AF" stroke-width="2"/>
+<text x="1165" y="1220" font-family="Malgun Gothic, sans-serif" font-size="32" font-weight="700" fill="#A96B16" text-anchor="middle" dominant-baseline="text-before-edge">공유 SQLite DB</text>
+<text x="1165" y="1274" font-family="Malgun Gothic, sans-serif" font-size="27" font-weight="700" fill="#15283D" text-anchor="middle" dominant-baseline="text-before-edge">banner_tracking.db</text>
+<text x="931" y="1322" font-family="Malgun Gothic, sans-serif" font-size="23" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">탐지 이력 · 사람 검토 · 단속 기록</text>
+<text x="931" y="1359" font-family="Malgun Gothic, sans-serif" font-size="23" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">WPF와 Python이 각각 읽기·쓰기</text>
+<polyline points="840,1050 870,1050 870,1308 900,1308" fill="none" stroke="#A96B16" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="900,1308 887.0,1302.0 887.0,1314.0" fill="#A96B16"/>
+<polygon points="840,1050 853.0,1056.0 853.0,1044.0" fill="#A96B16"/>
+<polyline points="1490,1050 1460,1050 1460,1308 1430,1308" fill="none" stroke="#A96B16" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="1430,1308 1443.0,1314.0 1443.0,1302.0" fill="#A96B16"/>
+<polygon points="1490,1050 1477.0,1044.0 1477.0,1056.0" fill="#A96B16"/>
+<rect x="80" y="1465" width="2240" height="65" rx="14" fill="#E9EEF5" stroke="#E9EEF5" stroke-width="2"/>
+<text x="1200" y="1481" font-family="Malgun Gothic, sans-serif" font-size="25" font-weight="400" fill="#15283D" text-anchor="middle" dominant-baseline="text-before-edge">가중치 실물 확인: best.pt  /  yolo26s.yaml · scale=s · banners 1클래스  |  AI 연산은 Python 서버에서 수행</text>
+<polyline points="80,1565 2320,1565" fill="none" stroke="#D8E1EA" stroke-width="2" stroke-linejoin="round"/>
+<text x="80" y="1590" font-family="Malgun Gothic, sans-serif" font-size="22" font-weight="400" fill="#51647A" text-anchor="start" dominant-baseline="text-before-edge">실선 = 명령·결과·파일 접근   ·   점선 = 생명주기 제어 / 상태 조회   ·   현재 소스 구조를 도식화</text>
+<text x="2320" y="1590" font-family="Malgun Gothic, sans-serif" font-size="22" font-weight="400" fill="#51647A" text-anchor="middle" dominant-baseline="text-before-edge">2026.11.17</text>
+</svg>

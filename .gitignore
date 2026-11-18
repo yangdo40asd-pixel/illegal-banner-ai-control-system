@@ -1,14 +1,3 @@
-# Temporary inference frames and camera dumps (do not publish)
-temp_*.jpg
-**/temp_*.jpg
-**/_temp_*.jpg
-_임시이미지/
-
-# Temporary inference frames and camera dumps (do not publish)
-temp_*.jpg
-**/temp_*.jpg
-_임시이미지/
-
 # ============================================================
 # 대용량 데이터 (업로드 금지)
 # ============================================================
@@ -48,6 +37,9 @@ backend/build/
 # 런타임 생성물
 # ============================================================
 backend/app/assets/
+temp_*.jpg
+_temp_*.jpg
+_임시이미지/
 **/banner_tracking.db
 inference_test/results*/
 inference_test/test_images/
@@ -65,3 +57,24 @@ __pycache__/
 *.pyc
 *.pyo
 *.cache
+
+# Portable layout: generated files and local-only assets
+**/bin/
+**/obj/
+**/.vs/
+**/.venv/
+**/build/
+**/dist/
+**/*.egg-info/
+**/.pytest_cache/
+runtime/
+src/backend/app/assets/
+data/private/
+configs/paths.local.json
+.refactor-backups/
+training/**/dataset.local.yaml
+experiments/legacy/
+experiments/results/**/weights/
+*.db-wal
+*.db-shm
+*.log

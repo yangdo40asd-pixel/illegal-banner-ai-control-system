@@ -1,0 +1,6 @@
+path: data/private/training/banners
+train: train/images
+val: valid/images
+test: test/images
+names:
+  0: banners

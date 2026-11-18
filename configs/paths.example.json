@@ -1,0 +1,12 @@
+{
+  "BackendEntry": "src/backend/app/main.py",
+  "PythonExecutable": "",
+  "ModelManifest": "models/manifest.json",
+  "YoloModelPath": "models/yolo/best.pt",
+  "CctvMediaDirectory": "data/samples/cctv",
+  "VlmImageDirectory": "data/samples/vlm",
+  "DatabasePath": "runtime/db/banner_tracking.db",
+  "RuntimeDirectory": "runtime",
+  "ApiBaseUrl": "http://localhost:8000",
+  "WsUrl": "ws://localhost:8000/ws/alerts"
+}

@@ -1,0 +1,22 @@
+name: verify
+on: [push, pull_request]
+jobs:
+  windows-cpu:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install -r src/backend/requirements.test.txt
+      - run: dotnet test BannerGuardSystem.sln -c Release --filter 'TestCategory!=LegacyRegression' --logger trx --results-directory runtime/test-results
+      - run: python -m pytest tests/backend -q --junitxml=runtime/test-results/backend.xml
+      - run: python scripts/check_docs.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: runtime/test-results
